@@ -15,6 +15,7 @@ from src.models.composite import composite_risk
 from src.models.lame import LAME
 from src.models.recession_probit import compute_probit_report
 from src.models.yield_curve import YieldCurve
+from src.ui.glossary import info_icon_html
 from src.ui.theme import PALETTE, inject_theme, risk_color
 from src.ui.views import credit, curve, dashboard, early_warning, growth, methodology, pulse, rate_path, recession
 from src.ui.views import lame as lame_view
@@ -61,7 +62,23 @@ def _load_market_prob() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_resource(show_spinner=False)
+def _warm_secondary_loaders() -> None:
+    """Fetch the Credit and Growth tab series up front so the data-status line
+    covers every FRED series, not just the ones behind tabs already opened.
+    Same default arguments as the views, so they share the cache entries."""
+    from src.data import credit, gdp
+
+    for fn in (credit.credit_stress, credit.fetch_liquidity, credit.fetch_clo,
+               credit.fetch_household, gdp.fetch_gdp_bundle, gdp.coincident_factor):
+        try:
+            fn()
+        except Exception:  # noqa: BLE001 - per-series failures are in the fetch log
+            pass
+
+
+# ttl matches the data caches: without it the fitted models (and the panel they
+# hold) were kept until the server restarted, so the headline never refreshed.
+@st.cache_resource(ttl=21600, show_spinner=False)
 def _build_models(cache_version: str) -> dict:
     """Build the LAME, yield-curve, and four-model probit recession engine.
 
@@ -87,6 +104,8 @@ def _build_models(cache_version: str) -> dict:
         probit = compute_probit_report()
     except Exception as exc:  # noqa: BLE001
         probit = {"error": str(exc)}
+
+    _warm_secondary_loaders()
 
     return {
         "lame": lame,
@@ -145,7 +164,19 @@ def _composite_now(models: dict) -> dict:
 
 
 def _header(models: dict | None) -> None:
-    timestamp = dt.datetime.now().strftime("%Y-%m-%d · %H:%M UTC")
+    from src.data import freshness
+
+    info = freshness.summary(freshness.status_table(freshness.fetch_log()))
+    if info["fetched_at"] is not None:
+        pulled = info["fetched_at"].strftime("%d %b %Y %H:%M")
+        daily = info["latest_daily"].strftime("%d %b") if info["latest_daily"] else "—"
+        monthly = info["latest_monthly"].strftime("%b %Y") if info["latest_monthly"] else "—"
+        timestamp = (
+            f"data pulled {pulled} · daily series through {daily} · "
+            f"monthly series through {monthly} · auto-refresh every 6h"
+        )
+    else:
+        timestamp = "data not loaded"
     composite_html = ""
     if models is not None:
         try:
@@ -153,7 +184,7 @@ def _header(models: dict | None) -> None:
             color = risk_color(comp["band"])
             composite_html = (
                 f'<div class="composite-readout">'
-                f'<div class="label-tiny">Composite Risk</div>'
+                f'<div class="label-tiny">Composite Risk{info_icon_html("Composite Risk", align="left")}</div>'
                 f'<div class="composite-number" style="color:{color};">{comp["composite"]}</div>'
                 f'<div class="risk-badge" style="color:{color};margin-top:6px;">{comp["band"]}</div>'
                 f"</div>"
@@ -173,6 +204,78 @@ def _header(models: dict | None) -> None:
         ),
         unsafe_allow_html=True,
     )
+
+
+_REFRESH_SCRIPTS = (
+    ("Policy path (Atlanta Fed)", "scripts.refresh_market_probability"),
+    ("CAPE (Shiller)", "scripts.refresh_cape"),
+)
+
+
+def _refresh_all() -> list[str]:
+    """Re-download the bundled CSVs, then drop every cache so the next run
+    refetches FRED and refits the models. Returns one line per script."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from src.data import freshness
+
+    results = []
+    root = Path(__file__).resolve().parent
+    for label, module in _REFRESH_SCRIPTS:
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-m", module], cwd=root,
+                capture_output=True, text=True, timeout=180,
+            )
+            ok = proc.returncode == 0
+            results.append(f"{label}: {'updated' if ok else 'FAILED (exit ' + str(proc.returncode) + ')'}")
+        except Exception as exc:  # noqa: BLE001
+            results.append(f"{label}: FAILED ({type(exc).__name__})")
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    freshness.clear_log()
+    return results
+
+
+def _data_status_bar() -> None:
+    """Series-status expander plus a manual refresh button."""
+    from src.data import freshness
+
+    table = freshness.status_table(freshness.fetch_log())
+    info = freshness.summary(table)
+    left, right = st.columns([5, 1])
+    with right:
+        if st.button("↻ Refresh data", key="refresh_data", help=(
+            "Re-downloads all FRED series, the Atlanta Fed policy-path file and "
+            "Shiller CAPE, then refits the models (about a minute). Data also "
+            "refreshes on its own every 6 hours when the page is loaded."
+        )):
+            with st.spinner("Refreshing all sources…"):
+                st.session_state.refresh_results = _refresh_all()
+            st.rerun()
+    with left:
+        problems = info["late"] + info["failed"] + info["discontinued"]
+        label = (
+            f"Data status · {info['n']} FRED series · {info['ok']} current"
+            + (f" · {info['late']} late" if info["late"] else "")
+            + (f" · {info['failed']} failed" if info["failed"] else "")
+            + (f" · {info['discontinued']} discontinued" if info["discontinued"] else "")
+        )
+        with st.expander(("⚠ " if problems else "") + label):
+            for line in st.session_state.pop("refresh_results", []):
+                st.caption(line)
+            st.caption(
+                "‘late’ = the newest observation is older than that series normally runs "
+                "(monthly data is dated the 1st and published 1–2 months later). "
+                "Policy path and CAPE come from bundled files; their dates are shown on their cards."
+            )
+            order = {"failed": 0, "discontinued": 1, "late": 2, "ok": 3}
+            st.dataframe(
+                table.sort_values("status", key=lambda s: s.map(order)).drop(columns=["fetched_at"]),
+                hide_index=True, width="stretch",
+            )
 
 
 def _nav() -> str:
@@ -240,6 +343,7 @@ def main() -> None:
     market_prob = _load_market_prob()
 
     _header(models)
+    _data_status_bar()
     selected = _nav()
 
     if selected == "Macro Dashboard":

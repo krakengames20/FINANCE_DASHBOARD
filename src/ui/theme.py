@@ -77,6 +77,38 @@ html, body, [class*="css"]  {
     align-items: center;
 }
 .panel-body { padding: 16px; }
+.info-tip {
+    position: relative;
+    display: inline-block;
+    margin-left: 6px;
+    color: #d4a574;
+    cursor: help;
+    font-size: 11px;
+    letter-spacing: 0;
+}
+.info-tip-body {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    z-index: 1000;
+    top: 18px;
+    left: -8px;
+    width: 300px;
+    padding: 10px 12px;
+    background: #1a2029;
+    border: 1px solid #3d4754;
+    border-radius: 3px;
+    color: #d4d4d0;
+    font-size: 11.5px;
+    line-height: 1.5;
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 400;
+    white-space: normal;
+    transition: opacity 0.12s;
+}
+.info-tip.tip-left .info-tip-body { left: auto; right: -8px; text-align: left; }
+.info-tip:hover .info-tip-body, .info-tip:focus .info-tip-body { visibility: visible; opacity: 1; }
 .metric-big {
     font-family: 'JetBrains Mono', monospace;
     font-size: 48px;

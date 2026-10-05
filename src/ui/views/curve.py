@@ -26,6 +26,7 @@ from src.ui.components import (
     stats_table_html,
 )
 from src.ui.theme import PALETTE
+from src.ui.glossary import chart_help
 
 
 _MATURITY_OPTIONS = [
@@ -224,6 +225,7 @@ def _render_funding_panel(panel: pd.DataFrame) -> None:
     fig.update_yaxes(title="Rate (%)")
     apply_template(fig, height=320)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("curve.funding")
 
     # --- SOFR vs EFFR spread (with stress threshold) -------------------
     if not sofr.empty and not effr.empty:
@@ -262,6 +264,7 @@ def _render_funding_panel(panel: pd.DataFrame) -> None:
                 fig2.update_yaxes(title="bp")
                 apply_template(fig2, height=240, show_legend=False)
                 st.plotly_chart(fig2, use_container_width=True)
+                chart_help("curve.sofr_effr")
 
             with cols_b[1]:
                 color = PALETTE["risk_critical"] if stress else PALETTE["risk_low"]
@@ -315,6 +318,7 @@ def _render_term_structure(yc: YieldCurve) -> None:
     fig.update_xaxes(title="Maturity")
     apply_template(fig, height=420)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("curve.term_structure")
 
     # Steepness shifts: 10Y-2Y change vs 12 months ago
     if {"current", "m12"}.issubset(ts.columns):
@@ -420,6 +424,7 @@ def _render_by_maturity(panel: pd.DataFrame, nber: pd.Series) -> None:
         fig.update_yaxes(title="Yield (%)")
         apply_template(fig, height=420)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("curve.maturity_history")
 
     # Distribution
     st.markdown(
@@ -434,6 +439,7 @@ def _render_by_maturity(panel: pd.DataFrame, nber: pd.Series) -> None:
         height=320,
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("curve.maturity_distribution")
 
     # Plain-English read
     bucket = (
@@ -490,6 +496,7 @@ def _render_spreads_tab(spreads: pd.DataFrame, nber: pd.Series) -> None:
     fig.update_yaxes(title="Spread (pp)")
     apply_template(fig, height=380)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("curve.spreads")
 
     for key, label, gloss in labels:
         if key not in spreads.columns:
@@ -524,6 +531,7 @@ def _render_spreads_tab(spreads: pd.DataFrame, nber: pd.Series) -> None:
                 height=300,
             )
             st.plotly_chart(fig, use_container_width=True)
+            chart_help("curve.spread_distribution")
 
         with cols[1]:
             rows = [
@@ -577,6 +585,7 @@ def _render_inversions_tab(spreads: pd.DataFrame, nber: pd.Series, stats: dict) 
         fig.update_yaxes(title="Spread (pp)")
         apply_template(fig, height=420, show_legend=False)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("curve.inversions")
 
     with right:
         st.markdown('<div class="label-small">Current run</div>', unsafe_allow_html=True)
@@ -754,6 +763,7 @@ def _render_curve_heatmap(yields_monthly: pd.DataFrame, maturities: list[float])
     fig.update_yaxes(title="Maturity", autorange="reversed")
     apply_template(fig, height=420, show_legend=False)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("curve.heatmap")
 
 
 def _render_curve_pca(
@@ -814,6 +824,7 @@ def _render_curve_pca(
     fig_load.update_xaxes(title="Maturity")
     apply_template(fig_load, height=320)
     st.plotly_chart(fig_load, use_container_width=True)
+    chart_help("curve.pca_loadings")
 
     # --- Scores over time (cumulative for interpretability) ---------------
     st.markdown(
@@ -835,6 +846,7 @@ def _render_curve_pca(
     fig_scores.update_yaxes(title="Cumulative score")
     apply_template(fig_scores, height=360)
     st.plotly_chart(fig_scores, use_container_width=True)
+    chart_help("curve.pca_scores")
 
     # --- Interpretation panel --------------------------------------------
     last_year = changes.loc[changes.index >= (changes.index.max() - pd.DateOffset(years=1))]

@@ -23,6 +23,7 @@ from src.data.market_probability import (
 )
 from src.ui.components import apply_template
 from src.ui.theme import PALETTE
+from src.ui.glossary import chart_help
 
 
 def _fade(hex_color: str, alpha: float) -> str:
@@ -170,6 +171,7 @@ def _fan_chart(rp: pd.DataFrame) -> None:
     fig.update_yaxes(title="Implied policy rate (%)")
     apply_template(fig, height=380)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("rate.fan")
 
 
 def _path_comparison(df: pd.DataFrame, snap: pd.Timestamp) -> None:
@@ -212,6 +214,7 @@ def _path_comparison(df: pd.DataFrame, snap: pd.Timestamp) -> None:
     fig.update_yaxes(title="Implied policy rate (%)")
     apply_template(fig, height=360)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("rate.path_shift")
 
 
 def _heatmap(df: pd.DataFrame, snap: pd.Timestamp) -> None:
@@ -240,6 +243,7 @@ def _heatmap(df: pd.DataFrame, snap: pd.Timestamp) -> None:
     fig.update_xaxes(title="Meeting / contract")
     apply_template(fig, height=420, show_legend=False)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("rate.heatmap")
 
 
 def _how_to_read(snap: pd.Timestamp) -> None:

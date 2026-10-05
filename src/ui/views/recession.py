@@ -37,6 +37,7 @@ from src.ui.nowcast import (
     state_note,
 )
 from src.ui.theme import PALETTE
+from src.ui.glossary import chart_help
 
 
 _TAB_STYLES = {
@@ -220,6 +221,7 @@ def _render_reading(report: dict, nber: pd.Series) -> None:
     fig.update_yaxes(title="P(new recession starts ≤12m) (%)", range=[0, 100])
     apply_template(fig, height=380)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("rec.history")
 
     # Plain-English read + trend attribution.
     c1, c2 = st.columns([1, 1])
@@ -358,6 +360,7 @@ def _render_under_hood(report: dict) -> None:
     fig.update_xaxes(title="P(new recession starts within 12 months) (%)", range=[0, max(max_x * 1.25, 40)])
     apply_template(fig, height=300, show_legend=False)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("rec.model_compare")
 
     bench_txt = ""
     if "Chauvet-Piger" in benchmarks:
@@ -417,6 +420,7 @@ def _render_percentiles(report: dict) -> None:
     fig.update_yaxes(autorange="reversed")
     apply_template(fig, height=max(260, len(feats) * 48), show_legend=False)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("rec.percentiles")
 
 
 # ----------------------------------------------------------------- Watchlist

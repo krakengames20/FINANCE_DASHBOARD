@@ -21,6 +21,7 @@ from src.ui.components import (
     stats_table_html,
 )
 from src.ui.theme import PALETTE
+from src.ui.glossary import chart_help
 
 
 _BANDS = [
@@ -94,6 +95,7 @@ def _render_top(history: pd.Series, model: LAME, nber: pd.Series) -> None:
         )
         fig.add_hline(y=-0.5, line=dict(color=PALETTE["risk_high"], width=1, dash="dash"))
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("labor.composite")
 
 
 def _render_breakdown(model: LAME) -> None:
@@ -141,6 +143,7 @@ def _render_breakdown(model: LAME) -> None:
     fig.update_yaxes(autorange="reversed")
     apply_template(fig, height=360, show_legend=False)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("labor.breakdown")
 
     # Compact table: each indicator shows its own latest value + date, then the
     # weight/contribution computed at the reference date.
@@ -230,6 +233,7 @@ def _render_sahm_rule(panel: pd.DataFrame, nber: pd.Series) -> None:
         fig.update_yaxes(title="UNRATE 3m-MA minus 12m-min (pp)")
         apply_template(fig, height=300, show_legend=False)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("labor.sahm")
 
     st.markdown(
         f'<div class="panel"><div class="panel-body" style="font-size:12px;line-height:1.6;color:{PALETTE["text_primary"]};">'
@@ -307,6 +311,7 @@ def _render_wage_tracker(panel: pd.DataFrame, nber: pd.Series) -> None:
         fig.update_yaxes(title="% YoY")
         apply_template(fig, height=300, show_legend=False)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("labor.wages")
 
     st.markdown(
         f'<div class="panel"><div class="panel-body" style="font-size:12px;color:{PALETTE["text_primary"]};line-height:1.6;">'
@@ -365,6 +370,7 @@ def _render_diffusion(model: LAME, nber: pd.Series) -> None:
         fig.update_yaxes(title="% positive", range=[0, 100])
         apply_template(fig, height=320, show_legend=False)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("labor.diffusion")
 
     with right:
         rows = [
@@ -473,6 +479,7 @@ def _render_small_multiples(model: LAME, nber: pd.Series) -> None:
                 font=dict(family="JetBrains Mono", color=PALETTE["text_primary"], size=12),
             )
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("labor.small_multiples")
 
 
 def _fade(hex_color: str, alpha: float) -> str:
@@ -597,6 +604,7 @@ def _render_beveridge(panel: pd.DataFrame, nber: pd.Series) -> None:
     fig.update_yaxes(title="Job openings (thousands)")
     apply_template(fig, height=460)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("labor.beveridge")
 
     # --- Interpretation panel: where we are vs the pre-COVID baseline -----
     _render_beveridge_read(df)

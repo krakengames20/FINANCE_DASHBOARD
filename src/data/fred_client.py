@@ -51,16 +51,21 @@ def _get_client():
 @_cache_data(ttl=21600, show_spinner=False)
 def fetch_series(series_id: str, start: str = "1959-01-01") -> pd.Series:
     """Fetch a single FRED series, cached for 6 hours."""
+    from src.data.freshness import record_fetch
+
     fred = _get_client()
     try:
         s = fred.get_series(series_id, observation_start=start)
     except Exception as exc:
+        record_fetch(series_id, error=f"{type(exc).__name__}: {exc}"[:200])
         raise RuntimeError(f"Failed to fetch FRED series {series_id!r}: {exc}") from exc
     if s is None or len(s) == 0:
+        record_fetch(series_id, error="returned no observations")
         raise RuntimeError(f"FRED series {series_id!r} returned no observations.")
     s = pd.Series(s).copy()
     s.index = pd.DatetimeIndex(s.index)
     s.name = series_id
+    record_fetch(series_id, s)
     return s
 
 

@@ -35,6 +35,7 @@ from src.ui.components import (
     sparkline_svg,
 )
 from src.ui.theme import PALETTE
+from src.ui.glossary import chart_help
 
 _SEV_COLOR = {
     "low": PALETTE["risk_low"],
@@ -162,6 +163,7 @@ def _row_headline(composite: pd.Series, components: pd.DataFrame, nber: pd.Serie
         )
         _clamp_x(fig, composite)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("credit.composite")
 
 
 # ---------------------------------------------------------------- row: drivers
@@ -188,6 +190,7 @@ def _row_drivers(components: pd.DataFrame) -> None:
         height=240, xaxis_title="standardized deviation (σ) · positive = more stress",
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("credit.drivers")
 
 
 # -------------------------------------------------------------- row: liquidity
@@ -254,6 +257,7 @@ def _row_liquidity(liq: dict) -> None:
             unsafe_allow_html=True,
         )
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("credit.liquidity")
 
 
 # ------------------------------------------------------------- row: household
@@ -344,6 +348,7 @@ def _row_clo(clo: dict) -> None:
             )
             _clamp_x(fig, g)
             st.plotly_chart(fig, use_container_width=True)
+            chart_help("credit.clo")
         else:
             _note("CLO supply series unavailable.")
     with right:
@@ -409,6 +414,7 @@ def _row_vs_risk(composite: pd.Series, prob: pd.Series, nber: pd.Series) -> None
         ))
         _clamp_x(fig, composite)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("credit.vs_risk")
     with right:
         z_now, _ = latest(composite)
         p_now, _ = latest(prob)

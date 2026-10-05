@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from src.models.early_warning import build_ladder, ladder_summary
+from src.ui.glossary import info_icon_html
 from src.ui.theme import PALETTE
 
 _SEV_COLOR = {
@@ -84,7 +85,7 @@ def _row_ladder(rungs: list[dict]) -> None:
             f'border-left:3px solid {color};border-bottom:1px solid {PALETTE["panel_border"]};">'
             f'<span style="color:{color};font-size:14px;width:14px;">{marker}</span>'
             f'<div style="flex:1;">'
-            f'<div style="color:{name_color};font-size:13px;">{r["label"]}'
+            f'<div style="color:{name_color};font-size:13px;">{r["label"]}{info_icon_html(r["label"])}'
             f'<span style="color:{tcolor};font-size:9px;letter-spacing:.12em;text-transform:uppercase;'
             f'margin-left:8px;">{r["track"]}</span></div>'
             f'<div style="color:{PALETTE["text_tiny"]};font-size:11px;margin-top:2px;">{r["detail"]}</div>'

@@ -53,7 +53,7 @@ flowchart LR
   ALFRED --> REV
   SHILLER --> CAPE
   CSV --> NBER & CAPE & MPT
-  ATL -. scripts/refresh_market_probability.py .-> CSV
+  ATL -.->|manual refresh script| CSV
 
   PROBITP --> PROBIT
   NBER --> PROBIT
@@ -76,11 +76,25 @@ flowchart LR
   PROBIT & REV --> T10
 ```
 
-## Persistence today
+## Persistence and refresh
 
-None. FRED data lives only in Streamlit's in-memory cache (6 h TTL, lost on restart). The only
-files on disk are the bundled CSVs in `data/`. A series whose history FRED trims (ICE BofA OAS
-series now keep 3 years) loses that history permanently. Phase 1 adds a local store to fix this.
+No database. FRED data lives in Streamlit's in-memory cache and is re-downloaded in full on
+each refresh, so FRED itself is the store. The exception is series FRED trims (ICE BofA OAS
+keeps 3 years), whose older history is not kept here.
+
+- **Automatic:** all caches, including the fitted models, expire after 6 h; the next page
+  load refetches and refits.
+- **Manual:** the *Refresh data* button (`app._refresh_all`) re-runs
+  `scripts/refresh_market_probability.py` and `scripts/refresh_cape.py`, then clears every cache.
+- **Status:** `fred_client.fetch_series` → `src/data/freshness.py` logs each fetch; the header
+  shows when data was pulled, and the *Data status* panel lists every series as
+  ok / late / failed / discontinued.
+
+## Explanations
+
+`src/ui/glossary.py` holds what-it-is / high / low text per indicator (shown as ⓘ hover
+tooltips on cards) and a "how to read this chart" note per chart (`chart_help(id)` under each
+chart). Tests fail if a chart is added without a note.
 
 ## Recession probit (why it matters here)
 

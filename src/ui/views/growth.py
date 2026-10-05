@@ -34,6 +34,7 @@ from src.ui.components import (
     sparkline_svg,
 )
 from src.ui.theme import PALETTE
+from src.ui.glossary import chart_help
 
 
 def _factor_band(z: float) -> tuple[str, str]:
@@ -206,6 +207,7 @@ def _row_headline(head: dict, nber: pd.Series) -> None:
                 xmax = max(xmax, now_dt)  # keep the current-quarter nowcast in view
             fig.update_xaxes(range=[gser.index.min(), xmax])
             st.plotly_chart(fig, use_container_width=True)
+            chart_help("growth.headline")
         else:
             _note("Official real-GDP series unavailable.")
 
@@ -257,6 +259,7 @@ def _row_contributions(contrib: dict) -> None:
             xaxis_title="contribution to real GDP growth (pp, SAAR)",
         )
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("growth.contributions")
 
     _contributions_history(contrib, order)
 
@@ -301,6 +304,7 @@ def _contributions_history(contrib: dict, order: list[str], quarters: int = 16) 
         unsafe_allow_html=True,
     )
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("growth.contrib_history")
 
 
 # ------------------------------------------------- row: high-frequency + factor
@@ -334,6 +338,7 @@ def _row_highfreq_and_factor(highfreq: dict, factor: dict, nber: pd.Series) -> N
             )
             _focus_axes(fig, wei)
             st.plotly_chart(fig, use_container_width=True)
+            chart_help("growth.wei")
         else:
             _note("Weekly Economic Index unavailable.")
 
@@ -355,6 +360,7 @@ def _row_highfreq_and_factor(highfreq: dict, factor: dict, nber: pd.Series) -> N
             )
             _focus_axes(fig, composite)
             st.plotly_chart(fig, use_container_width=True)
+            chart_help("growth.factor")
         else:
             _note("Coincident factor unavailable (needs monthly activity series).")
 
@@ -391,6 +397,7 @@ def _row_factor_validation(factor: dict, head: dict) -> None:
         fig.update_yaxes(title="real GDP (% SAAR)", range=_robust_range(frame["gdp"].values))
         apply_template(fig, height=300, show_legend=False)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("growth.factor_validation")
     with right:
         strength = ("strong" if abs(r) >= 0.6 else "moderate" if abs(r) >= 0.3 else "weak")
         rows = [
@@ -461,6 +468,7 @@ def _row_growth_vs_risk(factor: dict, prob: pd.Series, nber: pd.Series) -> None:
         )
         _focus_axes(fig, composite, y_robust=False)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("growth.vs_risk")
     with right:
         z_now, _ = latest(composite)
         p_now, _ = latest(prob)

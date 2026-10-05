@@ -102,10 +102,12 @@ def _add_vrect(fig, start, end, row=None, col=None):
 
 
 def panel_open(title: str, right_text: str | None = None) -> str:
+    from src.ui.glossary import info_icon_html
+
     right = f"<span>{escape(right_text)}</span>" if right_text else ""
     return (
         '<div class="panel">'
-        f'<div class="panel-header"><span>{escape(title)}</span>{right}</div>'
+        f'<div class="panel-header"><span>{escape(title)}{info_icon_html(title)}</span>{right}</div>'
         '<div class="panel-body">'
     )
 
@@ -129,7 +131,10 @@ def metric_card(
     """Self-contained metric card. Returns an HTML fragment.
 
     Pass an SVG string for ``sparkline_html`` (see :func:`sparkline_svg`).
+    An ⓘ tooltip is added automatically when ``label`` has a glossary entry.
     """
+    from src.ui.glossary import info_icon_html
+
     color = risk_color_hex or PALETTE["text_primary"]
     badge_html = (
         f'<span class="risk-badge" style="color:{color};margin-left:8px;">{escape(badge)}</span>'
@@ -143,7 +148,7 @@ def metric_card(
     # 4-space-indented lines as code blocks, which breaks raw HTML embedding.
     return (
         f'<div class="panel" style="height:100%;">'
-        f'<div class="panel-header"><span>{escape(label)}</span>{badge_html}</div>'
+        f'<div class="panel-header"><span>{escape(label)}{info_icon_html(label)}</span>{badge_html}</div>'
         f'<div class="panel-body">'
         f'<div class="metric-big data-font" style="color:{color};">{escape(value)}{unit_html}</div>'
         f'{subline_html}{spark_html}'

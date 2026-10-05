@@ -25,6 +25,7 @@ from src.models.lame import LAME
 from src.models.market_implied import MARKET_IMPLIED_SIGNALS, signal_summary
 from src.ui.components import add_recession_shading, apply_template, metric_card, sparkline_svg
 from src.ui.theme import PALETTE
+from src.ui.glossary import chart_help, info_icon_html
 
 
 def _sev_color(sev: str) -> str:
@@ -152,6 +153,7 @@ def render(panel: pd.DataFrame, nber: pd.Series, lame: LAME) -> None:
     fig.update_yaxes(title="% of labor indicators", range=[0, 100])
     apply_template(fig, height=360)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("pulse.breadth")
 
     # --- read ------------------------------------------------------------
     latest_below = float(below_hist.iloc[-1]) if not below_hist.empty else float("nan")
@@ -207,7 +209,7 @@ def _render_market_implied(panel: pd.DataFrame) -> None:
         pct = f"{s['percentile']:.0f}th" if np.isfinite(s["percentile"]) else "—"
         body.append(
             f'<tr style="border-bottom:1px solid #141a22;color:{PALETTE["text_primary"]};font-size:12px;">'
-            f'<td style="padding:6px 8px;">{label}'
+            f'<td style="padding:6px 8px;">{label}{info_icon_html(label)}'
             f'<span style="color:#5a6470;font-size:10px;"> · {s["as_of"].strftime("%d %b %Y")}</span></td>'
             f'<td style="text-align:right;padding:6px 8px;font-variant-numeric:tabular-nums;">{val}</td>'
             f'<td style="text-align:right;padding:6px 8px;font-variant-numeric:tabular-nums;color:{chg_color};">{chg}</td>'

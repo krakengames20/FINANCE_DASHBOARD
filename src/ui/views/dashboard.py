@@ -18,6 +18,7 @@ from src.ui.components import (
 )
 from src.ui.nowcast import HEADLINE_LABEL, headline_value_text, nowcast_panel_html, state_note
 from src.ui.theme import PALETTE, risk_color
+from src.ui.glossary import chart_help, info_icon_html
 
 
 def render(
@@ -109,7 +110,7 @@ def _recession_card(current: dict, history: pd.DataFrame) -> None:
     html = f"""
 <div class="panel" style="height:100%;">
   <div class="panel-header">
-    <span>{HEADLINE_LABEL}</span>
+    <span>{HEADLINE_LABEL}{info_icon_html(HEADLINE_LABEL)}</span>
     <span class="risk-badge" style="color:{color};">{band}</span>
   </div>
   <div class="panel-body">
@@ -273,6 +274,7 @@ def _row_policy_path(market_prob: pd.DataFrame | None) -> None:
         fig.update_yaxes(title="Implied rate (%)")
         apply_template(fig, height=260, show_legend=False)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("dash.policy_path")
 
 
 def _row_two(
@@ -331,6 +333,7 @@ def _row_two(
     )
     apply_template(fig, height=380)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("dash.three_lenses")
 
 
 def _row_three(ensemble_now, lame_now, curve_now, composite, current) -> None:
@@ -756,6 +759,7 @@ def _row_valuation_cape(nber: pd.Series) -> None:
         fig.update_yaxes(title="CAPE multiple")
         apply_template(fig, height=300, show_legend=False)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("dash.cape")
 
     implied = _render_cape_expected_return(today)
 
@@ -907,6 +911,7 @@ def _render_cape_expected_return(cape_today: float) -> dict | None:
         paired = paired[paired["cape"] > 0]
         fig = _cape_return_scatter(paired, fit, cape_today, implied, color)
         st.plotly_chart(fig, use_container_width=True)
+        chart_help("dash.cape_return")
         st.markdown(
             f'<div style="color:{PALETTE["text_tiny"]};font-size:11px;line-height:1.5;'
             f'margin-top:-6px;margin-bottom:8px;">'
@@ -1166,6 +1171,7 @@ def _row_financial_conditions(panel: pd.DataFrame, nber: pd.Series) -> None:
     )
     apply_template(fig, height=340)
     st.plotly_chart(fig, use_container_width=True)
+    chart_help("dash.fin_conditions")
 
     # Plain-English read
     _financial_conditions_read(nfci_s, cfnai_s)
