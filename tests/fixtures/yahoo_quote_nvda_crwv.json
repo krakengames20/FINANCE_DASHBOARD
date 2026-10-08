@@ -1,0 +1,40 @@
+{
+ "quoteResponse": {
+  "result": [
+   {
+    "quoteType": "EQUITY",
+    "currency": "USD",
+    "regularMarketPrice": 237.47,
+    "regularMarketPreviousClose": 239.24,
+    "fiftyTwoWeekHigh": 243.37,
+    "trailingPE": 30.250956,
+    "epsTrailingTwelveMonths": 7.85,
+    "epsForward": 15.9146,
+    "marketCap": 5734188187648,
+    "forwardPE": 14.921518,
+    "longName": "NVIDIA Corporation",
+    "shortName": "NVIDIA Corporation",
+    "regularMarketTime": 1791403200,
+    "marketState": "PRE",
+    "symbol": "NVDA"
+   },
+   {
+    "quoteType": "EQUITY",
+    "currency": "USD",
+    "regularMarketPrice": 88.45,
+    "regularMarketPreviousClose": 91.72,
+    "fiftyTwoWeekHigh": 153.2,
+    "epsTrailingTwelveMonths": -3.69,
+    "epsForward": -1.81256,
+    "marketCap": 48783409152,
+    "forwardPE": -48.798386,
+    "longName": "CoreWeave, Inc.",
+    "shortName": "CoreWeave, Inc.",
+    "regularMarketTime": 1791403201,
+    "marketState": "PRE",
+    "symbol": "CRWV"
+   }
+  ],
+  "error": null
+ }
+}

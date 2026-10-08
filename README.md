@@ -55,6 +55,29 @@ The first load fetches the FRED panel, fits the four-model ensemble, and runs th
 
 The Recession page averages four methodologically distinct, academically grounded 12-month-ahead models over a shared FRED universe: **NY Fed** (term-spread probit), **Wright** (spread + fed funds), **BIC-selected** (sign-constrained multivariate probit), and **Estrella–Mishkin** (closed form). **Chauvet–Piger** (FRED's smoothed Markov-switching series `RECPROUSM156N`) is shown beside them as a coincident benchmark — it nowcasts whether we're in recession now, a different horizon — and is excluded from the ensemble average. The page also reports a bootstrap 90% CI, per-indicator watchlist trigger levels, a 24-month trend attribution, and an interactive scenario tool. Every model probability is computed live from FRED — there are no hand-entered comparison values.
 
+## AI Bubble tab
+
+A daily monitor for the AI trade, built from a dot-com (2000–02) comparison: in 2000 the
+debt-funded firms broke first, leadership narrowed, the suppliers reset, and only then did
+stress reach credit and the wider market. The tab checks each step.
+
+- **Nine signals**, each CALM / WATCH / ALERT: builders vs leaders, AI breadth, equal-weight
+  vs cap-weight, semis trend, volatility (VIX and its term structure), high-yield credit,
+  10-year yield, private-credit proxies, and global equities from peak (the rulebook's
+  −20% / −30% buying triggers). Thresholds live in `THRESHOLDS` in `src/models/ai_bubble.py`.
+- **20 AI-exposed stocks** plus reference rows: price, today / 7-day / 1-month change,
+  distance from the 52-week high, trailing and forward P/E, and a 1–10 risk score.
+- **Charts**: builders ÷ leaders, group performance, 1-month moves, breadth.
+- **Catalyst countdown**: Anthropic S-1, roadshow, listing and lock-up; Big Tech earnings; FOMC.
+
+Edit the stock list, risk scores and event dates in `src/data/ai_watchlist.py`.
+
+Prices and P/E come from Yahoo Finance's public endpoints via `requests` (no extra
+dependency; unofficial and delayed ~15 minutes, so for monitoring, not trading). Prices are
+cached for 1 hour and P/E for 6 hours; **↻ Refresh data** clears both. If `yfinance` is
+installed it is used as a fallback for P/E. Credit and rates reuse the FRED client. The tab
+works even if FRED is unavailable.
+
 ## Data notes
 
 - Recession dates are sourced live from FRED's `USREC` (NBER-based recession indicator), falling back to the bundled `data/nber_recessions.csv` if the fetch is unavailable.

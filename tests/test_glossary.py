@@ -28,7 +28,20 @@ RENDERED_LABELS = [
     "Yield-curve inversion (10y–3m)", "Bank lending standards (SLOOS)",
     "Housing permits (YoY)", "Labor: Sahm rule", "Recession-start ensemble (12-mo)",
     "Labor breadth below trend", "Financial conditions (NFCI)", "Acute stress: VIX",
+    # AI Bubble tab
+    "AI bubble signals", "AI stocks", "Upcoming catalysts",
 ]
+
+
+def test_every_ai_signal_has_help():
+    import pandas as pd
+
+    from src.models.ai_bubble import evaluate_signals
+
+    for sig in evaluate_signals(pd.DataFrame()):
+        h = glossary.indicator_help(sig.name)
+        assert h is not None, sig.name
+        assert h["what"] and h["high"] and h["low"]
 
 
 @pytest.mark.parametrize("label", RENDERED_LABELS)

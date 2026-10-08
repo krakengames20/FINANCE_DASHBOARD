@@ -18,7 +18,7 @@ from src.models.recession_probit import compute_probit_report
 from src.models.yield_curve import YieldCurve
 from src.ui.glossary import info_icon_html
 from src.ui.theme import PALETTE, inject_theme, risk_color
-from src.ui.views import credit, curve, dashboard, early_warning, growth, methodology, pulse, rate_path, recession
+from src.ui.views import ai_bubble, credit, curve, dashboard, early_warning, growth, methodology, pulse, rate_path, recession
 from src.ui.views import lame as lame_view
 
 
@@ -29,7 +29,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-NAV_OPTIONS = ["Macro Dashboard", "Early Warning", "Recession", "Yield Curve", "Credit", "Labor", "Growth", "Pulse", "Policy Path", "Methodology"]
+NAV_OPTIONS = ["Macro Dashboard", "Early Warning", "Recession", "Yield Curve", "Credit", "Labor", "Growth", "Pulse", "Policy Path", "AI Bubble", "Methodology"]
 
 inject_theme()
 
@@ -304,7 +304,7 @@ def _nav() -> str:
     selected = option_menu(
         menu_title=None,
         options=NAV_OPTIONS,
-        icons=["grid", "exclamation-triangle", "graph-down", "activity", "bank", "people", "graph-up", "reception-4", "signpost-split", "book"],
+        icons=["grid", "exclamation-triangle", "graph-down", "activity", "bank", "people", "graph-up", "reception-4", "signpost-split", "cpu", "book"],
         orientation="horizontal",
         default_index=default_index,
         manual_select=manual_select,
@@ -341,7 +341,11 @@ def main() -> None:
             models = dict(_build_models(cache_version))
     except Exception as exc:
         _header(None)
-        _nav()
+        # The AI Bubble tab runs on Yahoo prices, not the FRED models, so it
+        # stays usable when FRED is down or the key is missing.
+        if _nav() == "AI Bubble":
+            ai_bubble.render()
+            return
         st.error(
             f"Failed to initialise the dashboard: {exc}. "
             "Make sure FRED_API_KEY is set in `.env` or `.streamlit/secrets.toml`."
@@ -383,13 +387,15 @@ def main() -> None:
         curve.render(models["panel"], models["nber"])
     elif selected == "Policy Path":
         rate_path.render(market_prob, models["nber"])
+    elif selected == "AI Bubble":
+        ai_bubble.render()
     elif selected == "Methodology":
         methodology.render(models.get("probit"))
 
     st.markdown(
         f'<div style="margin-top:48px;padding-top:16px;border-top:1px solid {PALETTE["panel_border"]};'
         f'color:{PALETTE["text_tiny"]};font-size:10px;letter-spacing:0.2em;text-transform:uppercase;">'
-        "Data · FRED  ·  Recession dates · NBER  ·  Policy path · Atlanta Fed  ·  This is research, not investment advice."
+        "Data · FRED  ·  Recession dates · NBER  ·  Policy path · Atlanta Fed  ·  AI Bubble prices · Yahoo Finance  ·  This is research, not investment advice."
         "</div>",
         unsafe_allow_html=True,
     )

@@ -12,6 +12,7 @@ flowchart LR
     SHILLER[(Shiller ie_data / GitHub mirror)]
     ATL[(Atlanta Fed MPT xlsx)]
     CSV[(bundled data/*.csv<br/>nber, cape, mpt)]
+    YAHOO[(Yahoo Finance<br/>v8 chart + v7 quote)]
   end
 
   subgraph LOAD[Loaders - src/data]
@@ -23,6 +24,7 @@ flowchart LR
     NBER[nber.py<br/>USREC flags]
     CAPE[cape.py]
     MPT[market_probability.py]
+    MKT[market_prices.py<br/>38 tickers, 2y daily<br/>+ ai_watchlist.py]
   end
 
   subgraph MODEL[Models - src/models]
@@ -34,6 +36,7 @@ flowchart LR
     MISC[conditions, breadth, external Sahm, market_implied]
     CSTRESS[credit stress z-composite]
     GFAC[coincident growth factor]
+    AIB[ai_bubble<br/>returns, baskets, 9 signals]
   end
 
   subgraph UI[Tabs - src/ui/views]
@@ -46,6 +49,7 @@ flowchart LR
     T7[Growth]
     T8[Pulse]
     T9[Policy Path]
+    T11[AI Bubble]
     T10[Methodology]
   end
 
@@ -54,6 +58,8 @@ flowchart LR
   SHILLER --> CAPE
   CSV --> NBER & CAPE & MPT
   ATL -.->|manual refresh script| CSV
+  YAHOO --> MKT
+  FRED -->|HY/IG OAS, Baa, 10y| AIB
 
   PROBITP --> PROBIT
   NBER --> PROBIT
@@ -62,6 +68,7 @@ flowchart LR
   PROBIT & LAME --> EW
   CRED --> CSTRESS
   GDP --> GFAC
+  MKT --> AIB
 
   COMP --> T1
   CAPE & MPT & MISC --> T1
@@ -74,6 +81,7 @@ flowchart LR
   MISC & LAME --> T8
   MPT --> T9
   PROBIT & REV --> T10
+  AIB --> T11
 ```
 
 ## Persistence and refresh
@@ -86,6 +94,10 @@ keeps 3 years), whose older history is not kept here.
   load refetches and refits.
 - **Manual:** the *Refresh data* button (`app._refresh_all`) re-runs
   `scripts/refresh_market_probability.py` and `scripts/refresh_cape.py`, then clears every cache.
+- **AI Bubble prices:** `market_prices.fetch_market_data` caches Yahoo prices for 1 h and
+  `fetch_fundamentals` caches P/E for 6 h. Failures are logged per ticker and shown in the
+  tab's *Price feed* expander, not in the FRED data-status panel. The tab does not depend on
+  the FRED models, so it still renders if FRED fails to load.
 - **Status:** `fred_client.fetch_series` → `src/data/freshness.py` logs each fetch; the header
   shows when data was pulled, and the *Data status* panel lists every series as
   ok / late / failed / discontinued.
