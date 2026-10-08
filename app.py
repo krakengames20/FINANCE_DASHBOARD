@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import math
 
 import pandas as pd
 import streamlit as st
@@ -80,7 +81,7 @@ def _warm_secondary_loaders() -> None:
 # hold) were kept until the server restarted, so the headline never refreshed.
 @st.cache_resource(ttl=21600, show_spinner=False)
 def _build_models(cache_version: str) -> dict:
-    """Build the LAME, yield-curve, and four-model probit recession engine.
+    """Build the labor and yield-curve models independently of the probit report.
 
     ``cache_version`` participates in Streamlit's resource cache key — bump
     it whenever model or class code changes, otherwise the *old* instance
@@ -97,14 +98,6 @@ def _build_models(cache_version: str) -> dict:
 
     yc = YieldCurve(panel)
 
-    # Four-model academic probit ensemble — the app-wide recession engine. It
-    # carries its own in-sample + walk-forward calibration. Isolated in a
-    # try/except so a probit-side failure can't take down the whole app.
-    try:
-        probit = compute_probit_report()
-    except Exception as exc:  # noqa: BLE001
-        probit = {"error": str(exc)}
-
     _warm_secondary_loaders()
 
     return {
@@ -112,8 +105,19 @@ def _build_models(cache_version: str) -> dict:
         "yield_curve": yc,
         "panel": panel,
         "nber": nber,
-        "probit": probit,
     }
+
+
+@st.cache_resource(ttl=21600, show_spinner=False)
+def _load_probit_report(cache_version: str) -> dict:
+    """Cache successful reports only; a failed calculation is retried on rerun."""
+    report = compute_probit_report()
+    if "error" in report:
+        raise RuntimeError(report["error"])
+    probability = report.get("ensemble_probability")
+    if probability is None or not math.isfinite(float(probability)):
+        raise RuntimeError("The recession model returned a non-finite probability.")
+    return report
 
 
 # ------------------------------------------------------------------------- run
@@ -133,7 +137,10 @@ def _recession_view(models: dict) -> tuple[dict, pd.DataFrame]:
     dashboard cards expect (ensemble + per-model 'submodels' + history)."""
     probit = models.get("probit") or {}
     if not probit or "error" in probit:
-        return {"ensemble": float("nan"), "submodels": {}, "drivers": {}}, pd.DataFrame()
+        return {
+            "ensemble": float("nan"), "submodels": {}, "drivers": {},
+            "report_like": {"error": probit.get("error", "No recession report is available.")},
+        }, pd.DataFrame()
     current = {
         "ensemble": probit["ensemble_probability"],
         "submodels": probit.get("model_probabilities", {}),
@@ -330,7 +337,8 @@ def main() -> None:
             # Bump this version string whenever model code changes — Streamlit's
             # cache_resource doesn't track imported modules, so a code edit to
             # e.g. src/models/lame.py won't otherwise invalidate the cached fit.
-            models = _build_models("v17-bic-constrained")
+            cache_version = "v18-recession-recovery"
+            models = dict(_build_models(cache_version))
     except Exception as exc:
         _header(None)
         _nav()
@@ -339,6 +347,13 @@ def main() -> None:
             "Make sure FRED_API_KEY is set in `.env` or `.streamlit/secrets.toml`."
         )
         return
+
+    # Catch outside the cache so transient failures aren't stored for six hours.
+    try:
+        with st.spinner("Calculating recession risk…"):
+            models["probit"] = _load_probit_report(cache_version)
+    except Exception as exc:  # noqa: BLE001
+        models["probit"] = {"error": str(exc)}
 
     market_prob = _load_market_prob()
 

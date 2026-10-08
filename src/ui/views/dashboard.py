@@ -16,7 +16,13 @@ from src.ui.components import (
     metric_card,
     sparkline_svg,
 )
-from src.ui.nowcast import HEADLINE_LABEL, headline_value_text, nowcast_panel_html, state_note
+from src.ui.nowcast import (
+    HEADLINE_LABEL,
+    headline_applicable,
+    headline_value_text,
+    nowcast_panel_html,
+    state_note,
+)
 from src.ui.theme import PALETTE, risk_color
 from src.ui.glossary import chart_help, info_icon_html
 
@@ -86,7 +92,7 @@ def _recession_card(current: dict, history: pd.DataFrame) -> None:
     withheld = shown == "—"
     band = "LOW" if ensemble_now < 20 else "ELEVATED" if ensemble_now < 40 else "HIGH" if ensemble_now < 60 else "CRITICAL"
     if withheld:
-        band = "IN RECESSION"
+        band = "IN RECESSION" if not headline_applicable(report_like) else "UNAVAILABLE"
     color = risk_color(band) if not withheld else PALETTE["text_muted"]
     note = state_note(report_like)
     note_html = (
@@ -128,6 +134,9 @@ def _recession_card(current: dict, history: pd.DataFrame) -> None:
 </div>
 """
     st.markdown(html, unsafe_allow_html=True)
+    if withheld and headline_applicable(report_like):
+        detail = report_like.get("error", "The model did not return a finite probability.")
+        st.warning(f"Recession risk is unavailable: {detail} Reload to retry the calculation.")
 
 
 def _lame_card(lame_hist: pd.Series) -> None:

@@ -197,7 +197,7 @@ def fetch_probit_panel(start: str = OBS_START) -> pd.DataFrame:
     """
     from src.data.fred_client import fetch_series
 
-    raw = pd.DataFrame()
+    frames = []
     for sid, info in {**SERIES_CONFIG, **TARGET_SERIES}.items():
         try:
             s = fetch_series(sid, start)
@@ -215,8 +215,11 @@ def fetch_probit_panel(start: str = OBS_START) -> pd.DataFrame:
             s = s.resample("MS").ffill()
         else:
             s = s.resample("MS").last()
-        raw[sid] = s
+        frames.append(s.rename(sid))
 
+    # Column assignment to an existing frame silently drops dates outside the
+    # first series' index. Preserve the union of independently published series.
+    raw = pd.DataFrame({s.name: s for s in frames}).sort_index()
     if not raw.empty:
         raw.index = pd.to_datetime(raw.index)
         raw = raw.resample("MS").last()
@@ -579,9 +582,8 @@ def _prepare(raw: pd.DataFrame, *, publication_lags: bool = False) -> dict:
     """Engineer features, filter coverage, and run full-sample BIC selection.
 
     Shared by :func:`build_report` (current estimate) and :func:`walk_forward`
-    (out-of-sample). ``model_df`` (rows complete for *every* available feature)
-    is only the common sample BIC selection compares candidates on; the models
-    themselves are fit on :func:`complete_rows` for their own features.
+    (out-of-sample). Optional features must not truncate the core training or
+    prediction sample; BIC selection handles its own common comparison sample.
     """
     data, feature_cols, feat_to_cat = engineer_features(raw, publication_lags=publication_lags)
     if "TARGET" not in data.columns:
@@ -591,13 +593,13 @@ def _prepare(raw: pd.DataFrame, *, publication_lags: bool = False) -> dict:
     if not available:
         raise RuntimeError("No features with sufficient coverage to fit the ensemble.")
 
-    model_df = data[available + ["TARGET", "USREC"]].dropna()
-    predict_df = data[available].dropna()
+    spread_feat = "SPREAD" if "SPREAD" in available else available[0]
+    model_df = complete_rows(data, [spread_feat])
+    predict_df = data[available]
     if len(model_df) < MIN_WINDOW:
         raise RuntimeError(f"Only {len(model_df)} training rows; need >= {MIN_WINDOW}.")
 
     y = model_df["TARGET"].astype(float)
-    spread_feat = "SPREAD" if "SPREAD" in available else available[0]
 
     # Pre-registered BIC-member rule (stationary pool, signs, cap 4, SPREAD forced).
     bic_selected = select_bic_features(data) or [spread_feat]
@@ -726,7 +728,7 @@ def build_report(raw: pd.DataFrame, *, bootstrap: int = BOOTSTRAP_ITERS, rng_see
     adverse_prob = _prob(res_bic.params.values, x_adv)
 
     # --- historical ensemble + BIC fitted series ------------------------------
-    ensemble_history, bic_history = _history(predict_df, data, models, res_bic, bic_selected)
+    ensemble_history, bic_history = _history(data, models)
 
     # --- 24-month trend attribution -------------------------------------------
     bic_panel = data[bic_selected].dropna()
@@ -866,31 +868,23 @@ def _watchlist(model_df, bic_selected, latest_vals, res_bic, feat_to_cat) -> lis
     return out
 
 
-def _history(predict_df, data, models, res_bic, bic_selected):
+def _history(data, models):
     """Per-date ensemble + BIC fitted probability series (0-100)."""
-    bic_history = (res_bic.predict(sm.add_constant(predict_df[bic_selected].astype(float))) * 100).rename("bic")
+    histories = {}
+    for name, model in models.items():
+        rows = data[model["features"]].dropna().astype(float)
+        histories[name] = model["res"].predict(sm.add_constant(rows, has_constant="add")) * 100
+    bic_history = histories["BIC-selected"].rename("bic")
 
-    em_series = None
     if "SPREAD" in data.columns:
-        em_series = pd.Series(
+        histories["Estrella-Mishkin"] = pd.Series(
             _stats.norm.cdf(_EM_CONST + _EM_SPREAD * data["SPREAD"].values) * 100,
             index=data.index,
         )
 
     # The nowcast panel (Chauvet-Piger, Sahm) is intentionally excluded from
     # the ensemble average (different question).
-    rows = []
-    for dt in predict_df.index:
-        vals = []
-        for m in models.values():
-            feats = m["features"]
-            if all(f in predict_df.columns for f in feats):
-                x = predict_df.loc[dt, feats].astype(float).values
-                vals.append(_prob(m["res"].params.values, x))
-        if em_series is not None and dt in em_series.index and np.isfinite(em_series.loc[dt]):
-            vals.append(float(em_series.loc[dt]))
-        rows.append(np.mean(vals) if vals else np.nan)
-    ensemble_history = pd.Series(rows, index=predict_df.index, name="ensemble").dropna()
+    ensemble_history = pd.DataFrame(histories).sort_index().mean(axis=1).rename("ensemble").dropna()
     return ensemble_history, bic_history.dropna()
 
 

@@ -41,8 +41,8 @@ Brier score and AUC are reported on the Methodology page, both in-sample (sectio
 ## Quick start
 
 ```bash
-git clone https://github.com/SecondOrderEdge/Macro-Dashboard.git
-cd Macro-Dashboard
+git clone https://github.com/krakengames20/FINANCE_DASHBOARD.git
+cd FINANCE_DASHBOARD
 pip install -r requirements.txt
 cp .env.example .env
 # Add your FRED_API_KEY to .env — free key at https://fred.stlouisfed.org/docs/api/api_key.html

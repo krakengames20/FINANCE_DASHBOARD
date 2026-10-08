@@ -22,6 +22,7 @@ Streamlit.
 from __future__ import annotations
 
 from html import escape
+from math import isfinite
 
 from src.ui.theme import PALETTE
 
@@ -57,7 +58,8 @@ def headline_value_text(report: dict | None) -> str:
         return "—"
     val = report.get("ensemble_probability")
     try:
-        return f"{float(val):.0f}"
+        probability = float(val)
+        return f"{probability:.0f}" if isfinite(probability) else "—"
     except (TypeError, ValueError):
         return "—"
 

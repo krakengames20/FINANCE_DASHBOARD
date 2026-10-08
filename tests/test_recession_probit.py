@@ -105,6 +105,48 @@ def test_report_core_fields(report):
     assert report["consensus"] in {"STRONG", "MODERATE", "WEAK"}
 
 
+def test_fetch_panel_preserves_dates_outside_first_series(monkeypatch):
+    from src.data import fred_client
+
+    first = pd.Series([0.1, 0.2], index=pd.date_range("2025-02-01", periods=2, freq="MS"))
+    longer = pd.Series([1., 2., 3., 4.], index=pd.date_range("2025-01-01", periods=4, freq="MS"))
+
+    def fetch(sid, start):
+        if sid == "CFNAI":
+            return first
+        if sid == "GS10":
+            return longer
+        raise RuntimeError("unavailable optional series")
+
+    monkeypatch.setattr(fred_client, "fetch_series", fetch)
+    raw = rp.fetch_probit_panel()
+    assert raw.index.min() == longer.index.min()
+    assert raw.index.max() == longer.index.max()
+    assert raw.loc[longer.index[-1], "GS10"] == 4.
+
+
+def test_optional_discontinued_series_does_not_truncate_history(synthetic_raw):
+    raw = synthetic_raw.copy()
+    raw["USSLIND"] = 1.
+    raw.loc[raw.index[-60]:, "USSLIND"] = np.nan
+    rep = rp.build_report(raw, bootstrap=0)
+    assert rep["ensemble_history"].index.max() == raw.index.max()
+    assert np.isfinite(rep["ensemble_history"].iloc[-1])
+    assert 0 <= rep["ensemble_probability"] <= 100
+
+
+def test_optional_gaps_cannot_block_core_training(synthetic_raw):
+    raw = synthetic_raw.copy()
+    # Each optional series meets 80% coverage, but their non-overlapping gaps
+    # leave no common sample. The spread models still have ample training data.
+    for i, sid in enumerate(["TCU", "T10Y2Y", "BAA10YM", "DRALACBS", "USSLIND", "CPIAUCSL"]):
+        raw[sid] = np.linspace(50., 100., len(raw))
+        raw.loc[raw.index[i::6], sid] = np.nan
+    rep = rp.build_report(raw, bootstrap=0)
+    assert 0 <= rep["ensemble_probability"] <= 100
+    assert rep["ensemble_history"].index.max() == raw.index.max()
+
+
 def test_report_has_four_forward_models(report):
     probs = report["model_probabilities"]
     for name in ["NY Fed", "Wright", "BIC-selected", "Estrella-Mishkin"]:

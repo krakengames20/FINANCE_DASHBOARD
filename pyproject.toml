@@ -45,8 +45,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/SecondOrderEdge/Macro-Dashboard"
-Repository = "https://github.com/SecondOrderEdge/Macro-Dashboard"
+Homepage = "https://github.com/krakengames20/FINANCE_DASHBOARD"
+Repository = "https://github.com/krakengames20/FINANCE_DASHBOARD"
 
 [tool.setuptools.packages.find]
 where = ["."]
