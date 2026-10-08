@@ -269,6 +269,89 @@ INDICATORS: dict[str, dict[str, str]] = {
         "high": "Above 30 = acute fear/stress; above 40 is crisis territory.",
         "low": "Below 15 = calm (sometimes complacent) markets.",
     },
+    # ---- AI Bubble tab ----------------------------------------------------
+    "AI bubble signals": {
+        "what": "Nine daily checks built from the dot-com comparison: is the weakest part of the AI "
+                "build-out cracking, and is stress spreading to credit and the wider market? "
+                "Each is CALM, WATCH or ALERT.",
+        "high": "More ALERTs = more of the 2000 sequence is showing: weak firms break first, "
+                "leadership narrows, then credit and rates tighten.",
+        "low": "Mostly CALM = trend intact. Booms can run long; CALM is not a forecast.",
+    },
+    "Builders vs leaders": {
+        "what": "Equal-weight basket of the levered builders (CoreWeave, Oracle, Nebius, Applied "
+                "Digital, IREN, Cipher, TeraWulf) divided by Nvidia, Broadcom and AMD. Shown as the "
+                "3-month change. WATCH below −10%, ALERT below −20%.",
+        "high": "Rising = the borrowers are keeping up with the suppliers; financing is still easy.",
+        "low": "Falling = the debt-funded part of the chain is breaking first, as CLECs and dot-coms "
+               "did months before Cisco peaked in 2000.",
+    },
+    "AI breadth": {
+        "what": "Share of the 20 AI names trading above their 200-day average. "
+                "WATCH below 60%, ALERT below 40%.",
+        "high": "Most names in uptrends = broad participation.",
+        "low": "A few leaders hold the index up while most AI names are in downtrends: a classic "
+               "late-cycle pattern.",
+    },
+    "Equal-weight vs cap-weight": {
+        "what": "Equal-weight S&P 500 (RSP) divided by the cap-weighted S&P 500 (SPY), as a "
+                "3-month change. WATCH below −3%, ALERT below −6%.",
+        "high": "Rising = the average stock is keeping up; leadership is broadening.",
+        "low": "Falling = gains concentrated in a few mega-caps; leadership is narrowing, "
+               "as it did into the 2000 top.",
+    },
+    "Semis trend": {
+        "what": "Semiconductor ETF (SMH) relative to the S&P 500, compared with its 50- and 200-day "
+                "averages. The value shows the gap to the 200-day average.",
+        "high": "Above both averages, 50-day above 200-day = suppliers still leading (CALM).",
+        "low": "Below the 200-day with the 50-day under it = supplier reset under way (ALERT), "
+               "as with chip stocks in 2000–01.",
+    },
+    "Volatility": {
+        "what": "VIX level, plus VIX ÷ VIX3M: near-term vs 3-month implied volatility. "
+                "WATCH at VIX 20 or ratio 0.95; ALERT at VIX 30 or ratio above 1.",
+        "high": "High VIX or ratio above 1 = acute fear; protection is expensive.",
+        "low": "Low VIX = calm markets, and cheap protection (puts) for anyone hedging.",
+    },
+    "High-yield credit": {
+        "what": "ICE BofA US high-yield option-adjusted spread (FRED), with its 1-month change. "
+                "WATCH at +50 bp in a month or 4.5%; ALERT at +100 bp or 6%.",
+        "high": "Widening = lenders demanding more to fund risky borrowers; the refinancing route "
+                "for neoclouds and SPVs is closing.",
+        "low": "Tight spreads = easy credit; little stress priced in.",
+    },
+    "10-year yield": {
+        "what": "10-year Treasury yield (FRED). WATCH at 5.0%, ALERT at 5.5%.",
+        "high": "High long rates raise the cost of every data-centre lease, SPV bond and "
+                "GPU-backed loan, and lower what future AI profits are worth today.",
+        "low": "Lower long rates ease financing for the build-out.",
+    },
+    "Private-credit proxies": {
+        "what": "Equal-weight basket of listed stand-ins for private credit: Blue Owl, Apollo, the "
+                "BDC ETF (BIZD) and SoftBank. Shown as % below its 52-week high. "
+                "WATCH below −15%, ALERT below −30%.",
+        "high": "Near highs = lenders to the build-out still trusted.",
+        "low": "Deep drawdown = markets doubt the loans and SPV equity behind the data centres.",
+    },
+    "Global equities from peak": {
+        "what": "MSCI All-Country World ETF (ACWI) vs its 52-week high. Ties to the rulebook: "
+                "deploy a third of dry powder at −20%, another third at −30%.",
+        "high": "Near 0% = no broad sell-off.",
+        "low": "−20% or worse = ALERT: the rulebook's first buying trigger.",
+    },
+    "AI stocks": {
+        "what": "The 20 AI-exposed names from the risk map plus reference rows. Today % is vs the "
+                "previous close; 7d and 1m use calendar days. Risk = expected damage in a lab "
+                "shock (1–10).",
+        "high": "Large gains concentrated in high-risk names = speculative phase.",
+        "low": "High-risk names deep below their highs while leaders hold up = early cracking.",
+    },
+    "Upcoming catalysts": {
+        "what": "Dated events that could reprice the AI trade: Anthropic S-1, roadshow and listing, "
+                "Big Tech earnings and capex guidance, FOMC, and the lock-up expiry.",
+        "high": "Several events close together = higher odds of a sharp move.",
+        "low": "Quiet calendar = fewer forced repricings.",
+    },
 }
 
 _ALIASES = {
@@ -519,6 +602,26 @@ CHARTS: dict[str, str] = {
     "rate.heatmap": (
         "Probability (colour) of each fed funds target range (rows) at each future meeting "
         "(columns). Read down a column for the full distribution at that meeting."
+    ),
+    # AI Bubble
+    "ai.builders_leaders": (
+        "Levered builders ÷ chip leaders, rebased to 100, with a 50-day average. A falling line = "
+        "the debt-funded builders are losing ground to the suppliers. In 2000 this kind of split "
+        "(CLECs and dot-coms falling while Cisco held up) came months before the leaders broke."
+    ),
+    "ai.groups": (
+        "Equal-weight performance of each watchlist group over the last 12 months, rebased to 100. "
+        "Shows which part of the AI chain is leading or cracking. Late listings join on their "
+        "first trading day."
+    ),
+    "ai.month_moves": (
+        "1-month price change for each of the 20 AI names. Red bars = falling. A wall of red in "
+        "the levered builders with green in the chip leaders = the 2000 pattern."
+    ),
+    "ai.breadth": (
+        "Share of the 20 AI names above their 50-day (short trend) and 200-day (long trend) "
+        "averages. The dashed lines mark the 60% WATCH and 40% ALERT levels for the 200-day line. "
+        "Breadth falling while the indices make new highs = narrowing leadership."
     ),
 }
 
