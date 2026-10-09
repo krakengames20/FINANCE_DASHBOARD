@@ -93,7 +93,7 @@ def credit_stress(start: str = "1997-01-01") -> dict:
     """Standardized credit-stress composite (higher = more stress).
 
     Each input is resampled to month-start, oriented so higher = more stress,
-    z-scored over the common sample, and the available z-scores are averaged.
+    z-scored over its own full available revised history, then averaged.
     Returns ``{"composite", "components", "log"}`` (empty composite on failure).
     """
     log: list[str] = []
@@ -149,11 +149,13 @@ def yoy(series: pd.Series | None) -> pd.Series:
         return pd.Series(dtype=float)
     s = series.dropna()
     if isinstance(s.index, pd.DatetimeIndex):
-        inferred = pd.infer_freq(s.index)
-        periods = 4 if (inferred or "").startswith("Q") else 12
+        spacing = s.index.to_series().diff().median()
+        quarterly = pd.notna(spacing) and spacing >= pd.Timedelta(days=70)
+        s = s.resample("QS" if quarterly else "MS").last()
+        periods = 4 if quarterly else 12
     else:
         periods = 12
-    return (s.pct_change(periods) * 100.0).dropna()
+    return (s.pct_change(periods, fill_method=None) * 100.0).dropna()
 
 
 def align_corr(a: pd.Series, b: pd.Series) -> tuple[pd.DataFrame, float]:

@@ -33,7 +33,7 @@ HEADLINE_SERIES: list[tuple[str, str]] = [
 
 CONTRIBUTION_SERIES: list[tuple[str, str]] = [
     ("DPCERY2Q224SBEA", "Consumption"),
-    ("A006RY2Q224SBEA", "Investment"),
+    ("A007RY2Q224SBEA", "Fixed investment"),
     ("A822RY2Q224SBEA", "Government"),
     ("A019RY2Q224SBEA", "Net exports"),
     ("A014RY2Q224SBEA", "Inventories"),
@@ -118,7 +118,7 @@ def latest(series: pd.Series | None) -> tuple[float, pd.Timestamp | None]:
 def coincident_factor(start: str = "1960-01-01") -> dict:
     """A standardized coincident growth factor from monthly hard data.
 
-    Each input is taken year-over-year, z-scored over the common sample, and
+    Each input is taken year-over-year, z-scored over its own full available sample, and
     the available z-scores are averaged per month. The result is a unitless
     "growth momentum" series (0 = at trend, positive = above trend), not a GDP
     percentage — deliberately simple and fully interpretable.
@@ -131,7 +131,7 @@ def coincident_factor(start: str = "1960-01-01") -> dict:
     zframes: dict[str, pd.Series] = {}
     for sid, s in raw.items():
         monthly = s.resample("MS").last()
-        yoy = monthly.pct_change(12) * 100.0
+        yoy = monthly.pct_change(12, fill_method=None) * 100.0
         yoy = yoy.dropna()
         if yoy.std(ddof=0) == 0 or yoy.empty:
             continue

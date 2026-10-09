@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
+import numpy as np
 
 CHART_URL = "https://query2.finance.yahoo.com/v8/finance/chart/{ticker}"
 QUOTE_URL = "https://query2.finance.yahoo.com/v7/finance/quote"
@@ -99,6 +100,7 @@ def parse_chart(payload: dict) -> tuple[pd.Series, dict[str, Any]]:
         pd.to_numeric(pd.Series(closes), errors="coerce").values, index=dates, dtype=float
     )
     s = s[~s.index.duplicated(keep="last")].dropna().sort_index()
+    s = s[np.isfinite(s) & (s > 0)]
     if s.empty:
         raise ValueError("no valid closes")
     s.name = meta.get("symbol")

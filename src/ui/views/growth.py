@@ -224,15 +224,14 @@ def _row_contributions(contrib: dict) -> None:
         unsafe_allow_html=True,
     )
     order = [sid for sid, _ in CONTRIBUTION_SERIES if sid in contrib]
-    vals, dt = {}, None
-    for sid in order:
-        v, d = latest(contrib[sid])
-        if np.isfinite(v):
-            vals[LABELS.get(sid, sid)] = v
-            dt = d
-    if not vals:
+    common = pd.DataFrame({sid: contrib[sid] for sid in order}).dropna()
+    if common.empty:
+        st.warning("GDP contributions have no common quarter; a mixed-quarter total would be misleading.")
         return
-    series = pd.Series(vals)
+    dt = common.index[-1]
+    series = common.iloc[-1].rename(index=LABELS)
+    if len(order) < len(CONTRIBUTION_SERIES):
+        st.caption("Partial decomposition: unavailable components are excluded from the shown sum.")
 
     left, right = st.columns([3, 1])
     with right:
@@ -266,7 +265,7 @@ def _row_contributions(contrib: dict) -> None:
 
 _CONTRIB_COLORS = {
     "Consumption": PALETTE["risk_low"],
-    "Investment": PALETTE["accent"],
+    "Fixed investment": PALETTE["accent"],
     "Government": PALETTE["submodel"]["housing"],
     "Net exports": PALETTE["risk_high"],
     "Inventories": PALETTE["submodel"]["sentiment"],
@@ -282,7 +281,7 @@ def _contributions_history(contrib: dict, order: list[str], quarters: int = 16) 
             cols[LABELS.get(sid, sid)] = s
     if len(cols) < 2:
         return
-    df = pd.concat(cols, axis=1).sort_index().tail(quarters)
+    df = pd.concat(cols, axis=1).sort_index().dropna().tail(quarters)
     if df.empty:
         return
     fig = go.Figure()
@@ -300,7 +299,7 @@ def _contributions_history(contrib: dict, order: list[str], quarters: int = 16) 
     apply_template(fig, height=260)
     st.markdown(
         '<div class="label-tiny" style="margin-top:6px;">Driver rotation · stacked contributions, '
-        f'last {quarters} quarters (bars sum to ≈ real GDP growth)</div>',
+        f'last {quarters} complete quarters ({"bars sum to ≈ real GDP growth" if len(order) == len(CONTRIBUTION_SERIES) else "partial decomposition"})</div>',
         unsafe_allow_html=True,
     )
     st.plotly_chart(fig, use_container_width=True)

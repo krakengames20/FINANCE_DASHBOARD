@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from streamlit_option_menu import option_menu
 
-from src.models.yield_curve import YieldCurve, _runs
+from src.models.yield_curve import YieldCurve, _nber_peaks, _runs
 from src.ui.components import (
     add_recession_shading,
     apply_template,
@@ -593,9 +593,10 @@ def _render_inversions_tab(spreads: pd.DataFrame, nber: pd.Series, stats: dict) 
             ("Months inverted", str(stats.get("months_inverted", 0))),
             ("Max depth (current)", f"{stats['max_depth_current']:+.2f} pp" if np.isfinite(stats.get('max_depth_current', np.nan)) else "—"),
             ("Avg lead to NBER peak", f"{stats['avg_lead_to_recession']:.0f} months" if np.isfinite(stats.get('avg_lead_to_recession', np.nan)) else "—"),
-            ("Hit rate (>3m episodes)", f"{stats['hit_rate'][0]} / {stats['hit_rate'][1]}" if stats.get("hit_rate", (0, 0))[1] else "—"),
+            ("Hit rate (resolved >3m episodes)", f"{stats['hit_rate'][0]} / {stats['hit_rate'][1]}" if stats.get("hit_rate", (0, 0))[1] else "—"),
         ]
         st.markdown(stats_table_html(rows), unsafe_allow_html=True)
+        st.caption(f"Pending episodes excluded from hit rate: {stats.get('pending_episodes', 0)}")
 
         interp = _interpretation(
             stats.get("months_inverted", 0),
@@ -625,13 +626,7 @@ def _episode_table(spread: pd.Series, nber: pd.Series) -> pd.DataFrame:
     inverted = monthly < 0
     nber_monthly = nber.copy()
     nber_monthly.index = pd.DatetimeIndex(nber_monthly.index).to_period("M").to_timestamp()
-    # NBER peaks
-    peaks: list[pd.Timestamp] = []
-    prev = False
-    for ts, val in nber_monthly.items():
-        if val and not prev:
-            peaks.append(ts)
-        prev = bool(val)
+    peaks = _nber_peaks(nber_monthly)
 
     rows = []
     for start_i, end_i in _runs(inverted):
@@ -641,13 +636,16 @@ def _episode_table(spread: pd.Series, nber: pd.Series) -> pd.DataFrame:
         end = monthly.index[end_i]
         depth = float(monthly.iloc[start_i : end_i + 1].min())
         # Lead to next NBER peak within 36 months
-        future = [p for p in peaks if 0 <= (p - start).days / 30.5 <= 36]
+        start_month = start.to_period("M")
+        future = [p for p in peaks if 0 <= p.to_period("M").ordinal - start_month.ordinal <= 36]
         if future:
-            lead = (future[0] - start).days / 30.5
+            lead = future[0].to_period("M").ordinal - start_month.ordinal
             outcome = f"recession ({future[0].strftime('%b %Y')})"
             lead_str = f"{lead:.0f}"
         else:
-            outcome = "no recession in 36m"
+            last = nber_monthly.dropna().index.max()
+            elapsed = last.to_period("M").ordinal - start_month.ordinal if pd.notna(last) else 0
+            outcome = "pending: 36m not observed" if elapsed < 36 else "no recession in 36m"
             lead_str = "—"
         rows.append(
             {

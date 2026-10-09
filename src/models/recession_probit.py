@@ -2,7 +2,7 @@
 
 Ported from the standalone Recession_Probability_Model repo that drives the
 weekly investment-committee email. The headline ensemble is the equal-weighted
-mean of four *methodologically distinct* specifications over a shared 37-series
+mean of three locally estimated specifications over a shared 38-series
 FRED universe. The target is start-dated: y_t = 1 if an NBER peak falls in
 t+1..t+12 (a new recession starts within the next 12 months); months already in
 recession (peak month through trough) are dropped from training and scoring.
@@ -10,7 +10,7 @@ recession (peak month through trough) are dropped from training and scoring.
 1. **NY Fed**         — probit on the 10y-3m term spread alone (Estrella-Mishkin 1998).
 2. **Wright**         — probit on spread + fed funds rate (Wright 2006).
 3. **BIC-selected**   — term spread + <=3 stationary, sign-restricted indicators (forward-stepwise BIC, cap 4).
-4. **Estrella-Mishkin** — closed form with frozen 2006 parameters.
+**Estrella-Mishkin** — separate point-horizon benchmark with frozen 2006 parameters.
 
 **Chauvet-Piger** (FRED's smoothed Markov-switching series RECPROUSM156N) and
 the real-time **Sahm rule** (SAHMREALTIME) form a separate, descriptive
@@ -75,7 +75,7 @@ SERIES_CONFIG: dict[str, dict] = {
     "DGORDER":  {"name": "Durable Goods Orders",                   "category": "Industrial", "transform": "yoy"},
     "IPMAN":    {"name": "Industrial Production: Manufacturing",   "category": "Industrial", "transform": "yoy"},
     "UMCSENT":  {"name": "U. Michigan Consumer Sentiment",         "category": "Consumer", "transform": "level"},
-    "PCECC96":  {"name": "Real Personal Consumption Expenditures", "category": "Consumer", "transform": "yoy"},
+    "PCECC96":  {"name": "Real Personal Consumption Expenditures", "category": "Consumer", "transform": "yoy", "freq": "Q"},
     "DSPIC96":  {"name": "Real Disposable Personal Income",        "category": "Consumer", "transform": "yoy"},
     "RSAFS":    {"name": "Advance Retail Sales",                   "category": "Consumer", "transform": "yoy"},
     "UNRATE":   {"name": "Unemployment Rate",                      "category": "Labor", "transform": "level"},
@@ -144,7 +144,7 @@ SIGN_CONSTRAINTS = {
 # enforced on every selected feature. SPREAD is always forced in first. Rate
 # levels (FEDFUNDS, GS10, TB3MS), UNRATE/TCU/DRALACBS levels, inflation rates,
 # near-duplicate spreads (T10Y2Y, T10Y3M), USSLIND (discontinued) and PCECC96
-# (quarterly, mostly NaN after resampling) are deliberately not candidates.
+# (quarterly) are deliberately not candidates.
 BIC_FORCED_FEATURE = "SPREAD"
 BIC_POOL_SIGNS: dict[str, str] = {
     **{f: "negative" for f in [
@@ -169,7 +169,7 @@ def all_series_ids() -> list[str]:
 # Plain-English labels for the two engineered features that aren't raw FRED IDs.
 _DERIVED_LABELS = {
     "SPREAD": "10Y–3M Treasury spread",
-    "UNRATE_CHG3": "Unemployment rate · 3-month change",
+    "UNRATE_CHG3": "Unemployment rate · YoY change in 3-month average",
 }
 
 
@@ -212,7 +212,7 @@ def fetch_probit_panel(start: str = OBS_START) -> pd.DataFrame:
         elif freq == "D":
             s = s.resample("MS").last()
         elif freq == "Q":
-            s = s.resample("MS").ffill()
+            s = s.resample("MS").asfreq()
         else:
             s = s.resample("MS").last()
         frames.append(s.rename(sid))
@@ -223,6 +223,11 @@ def fetch_probit_panel(start: str = OBS_START) -> pd.DataFrame:
     if not raw.empty:
         raw.index = pd.to_datetime(raw.index)
         raw = raw.resample("MS").last()
+        # Extend quarterly values through their own reference quarter, including
+        # its last two months at the ragged edge; never fill into a missing quarter.
+        for sid, info in SERIES_CONFIG.items():
+            if info.get("freq") == "Q" and sid in raw:
+                raw[sid] = raw[sid].groupby(raw.index.to_period("Q")).ffill()
     return raw
 
 
@@ -457,9 +462,14 @@ def check_sign_constraints(res, selected_feats: Iterable[str], signs: dict[str, 
 
 
 def _fit_probit(y: pd.Series, X: pd.DataFrame, maxiter: int = 300):
-    return sm.Probit(y, sm.add_constant(X.astype(float))).fit(
+    if y.nunique() != 2:
+        raise RuntimeError("Probit target needs both event and non-event observations.")
+    result = sm.Probit(y, sm.add_constant(X.astype(float), has_constant="add")).fit(
         disp=False, method="bfgs", maxiter=maxiter
     )
+    if not result.mle_retvals.get("converged", False) or not np.isfinite(result.params).all():
+        raise RuntimeError("Probit fit did not converge to finite coefficients.")
+    return result
 
 
 def complete_rows(data: pd.DataFrame, feats: list[str], cutoff: pd.Timestamp | None = None) -> pd.DataFrame:
@@ -593,7 +603,9 @@ def _prepare(raw: pd.DataFrame, *, publication_lags: bool = False) -> dict:
     if not available:
         raise RuntimeError("No features with sufficient coverage to fit the ensemble.")
 
-    spread_feat = "SPREAD" if "SPREAD" in available else available[0]
+    if "SPREAD" not in available or "FEDFUNDS" not in available:
+        raise RuntimeError("SPREAD and FEDFUNDS are required to fit the named ensemble models.")
+    spread_feat = "SPREAD"
     model_df = complete_rows(data, [spread_feat])
     predict_df = data[available]
     if len(model_df) < MIN_WINDOW:
@@ -616,8 +628,23 @@ def _prepare(raw: pd.DataFrame, *, publication_lags: bool = False) -> dict:
     }
 
 
+def estrella_mishkin_history(raw: pd.DataFrame) -> pd.Series:
+    """Frozen point-horizon benchmark, using the published bond-equivalent bill yield.
+
+    Estrella & Trubin (2006), footnote 3: convert the 91-day bill's discount
+    yield to a 365-day investment yield before subtracting from GS10.
+    This predicts recession in month t+12, not a recession start by t+12.
+    """
+    if not {"GS10", "TB3MS"}.issubset(raw.columns):
+        return pd.Series(dtype=float, name="estrella_mishkin")
+    rows = raw[["GS10", "TB3MS"]].dropna()
+    bill = 365. * rows["TB3MS"] / (360. - .91 * rows["TB3MS"])
+    return pd.Series(_stats.norm.cdf(_EM_CONST + _EM_SPREAD * (rows["GS10"] - bill)) * 100.,
+                     index=rows.index, name="estrella_mishkin")
+
+
 def build_report(raw: pd.DataFrame, *, bootstrap: int = BOOTSTRAP_ITERS, rng_seed: int = 42) -> dict:
-    """Fit the four forward models (+ Chauvet-Piger benchmark) and assemble the report.
+    """Fit three recession-start models and keep different-target benchmarks separate.
 
     ``raw`` is a month-start indexed DataFrame of raw FRED levels (see
     :func:`fetch_probit_panel`). Returns a dict mirroring the email's
@@ -640,7 +667,7 @@ def build_report(raw: pd.DataFrame, *, bootstrap: int = BOOTSTRAP_ITERS, rng_see
     res_ny = _fit_probit(ny_rows["TARGET"].astype(float), ny_rows[[spread_feat]], maxiter=500)
     models["NY Fed"] = {"res": res_ny, "features": [spread_feat]}
 
-    wright_feats = [f for f in [spread_feat, "FEDFUNDS"] if f in available]
+    wright_feats = [spread_feat, "FEDFUNDS"]
     wr_rows = complete_rows(data, wright_feats)
     res_wr = _fit_probit(wr_rows["TARGET"].astype(float), wr_rows[wright_feats], maxiter=500)
     models["Wright"] = {"res": res_wr, "features": wright_feats}
@@ -653,26 +680,32 @@ def build_report(raw: pd.DataFrame, *, bootstrap: int = BOOTSTRAP_ITERS, rng_see
     # --- current probabilities ------------------------------------------------
     # Each model is scored on the latest row where ITS features are all present,
     # so a lagging peripheral series can't stale the whole panel.
-    latest_vals, _ = _latest_values(data, bic_selected)
+    common_features = list(dict.fromkeys([spread_feat, "FEDFUNDS"] + bic_selected))
+    common = data[common_features].dropna()
+    if common.empty:
+        raise RuntimeError("No common observation for the ensemble features.")
+    score_date = common.index[-1]
+    scoring_data = data.loc[:score_date]
+    latest_vals, _ = _latest_values(scoring_data, bic_selected)
     if latest_vals is None:
         raise RuntimeError("No complete recent observation for the BIC features.")
 
     # Forward (recession-start) models — these form the ensemble.
     model_probs: dict[str, float] = {}
     for name, m in models.items():
-        x, _ = _latest_values(data, m["features"])
+        x, _ = _latest_values(scoring_data, m["features"])
         if x is None:
             continue
         model_probs[name] = _prob(m["res"].params.values, x)
-    if "SPREAD" in data.columns:
-        spread_val = float(data["SPREAD"].dropna().iloc[-1])
-        model_probs["Estrella-Mishkin"] = float(_stats.norm.cdf(_EM_CONST + _EM_SPREAD * spread_val) * 100)
 
     # "In recession now" nowcast panel — NOT part of the ensemble. Chauvet-Piger
     # and the Sahm rule answer a different question from the start-dated
     # forward models, so they are shown separately and never averaged in.
     nowcast = nowcast_panel(raw)
     benchmarks: dict[str, float] = {}
+    em = estrella_mishkin_history(raw)
+    if not em.empty:
+        benchmarks["Estrella-Mishkin"] = float(em.iloc[-1])
     cp_now = nowcast["indicators"]["Chauvet-Piger"]["value"]
     if cp_now is not None:
         benchmarks["Chauvet-Piger"] = float(cp_now)
@@ -692,6 +725,7 @@ def build_report(raw: pd.DataFrame, *, bootstrap: int = BOOTSTRAP_ITERS, rng_see
         data_through = bic_last_dates[most_lagged].strftime("%Y-%m")
     else:
         data_through = predict_df.index[-1].strftime("%Y-%m")
+    data_through = score_date.strftime("%Y-%m")
     run_dt = pd.Timestamp.today().normalize()
     lagged_series = [
         f"{feat} (last: {dt.strftime('%Y-%m')})"
@@ -731,7 +765,7 @@ def build_report(raw: pd.DataFrame, *, bootstrap: int = BOOTSTRAP_ITERS, rng_see
     ensemble_history, bic_history = _history(data, models)
 
     # --- 24-month trend attribution -------------------------------------------
-    bic_panel = data[bic_selected].dropna()
+    bic_panel = scoring_data[bic_selected].dropna()
     trend_attribution = _trend_attribution(bic_panel, res_bic, bic_selected, latest_vals, bic_prob)
 
     # --- consensus / signal ---------------------------------------------------
@@ -751,7 +785,7 @@ def build_report(raw: pd.DataFrame, *, bootstrap: int = BOOTSTRAP_ITERS, rng_see
 
     # Trailing 24-month series for sparklines (BIC features).
     indicator_series = {
-        feat: data[feat].dropna().tail(24) for feat in bic_selected if feat in data.columns
+        feat: scoring_data[feat].dropna().tail(24) for feat in bic_selected if feat in data.columns
     }
 
     return {
@@ -767,6 +801,7 @@ def build_report(raw: pd.DataFrame, *, bootstrap: int = BOOTSTRAP_ITERS, rng_see
         "prob_range": round(prob_range, 2),
         "model_probabilities": {k: round(v, 2) for k, v in model_probs.items()},
         "benchmark_probabilities": {k: round(v, 2) for k, v in benchmarks.items()},
+        "model_as_of": score_date.strftime("%Y-%m"),
         "nowcast": nowcast,
         "recession_state": nowcast["state"],
         "headline_applicable": nowcast["headline_applicable"],
@@ -876,23 +911,20 @@ def _history(data, models):
         histories[name] = model["res"].predict(sm.add_constant(rows, has_constant="add")) * 100
     bic_history = histories["BIC-selected"].rename("bic")
 
-    if "SPREAD" in data.columns:
-        histories["Estrella-Mishkin"] = pd.Series(
-            _stats.norm.cdf(_EM_CONST + _EM_SPREAD * data["SPREAD"].values) * 100,
-            index=data.index,
-        )
-
     # The nowcast panel (Chauvet-Piger, Sahm) is intentionally excluded from
     # the ensemble average (different question).
-    ensemble_history = pd.DataFrame(histories).sort_index().mean(axis=1).rename("ensemble").dropna()
+    ensemble_history = pd.DataFrame(histories).sort_index().dropna().mean(axis=1).rename("ensemble")
     return ensemble_history, bic_history.dropna()
 
 
 def _trend_attribution(predict_df, res_bic, bic_selected, latest_vals, bic_prob) -> dict:
     """Decompose the 24-month BIC probability change into per-feature partial effects."""
     try:
-        idx_24m = max(0, len(predict_df) - 25)
-        vals_24m = predict_df[bic_selected].iloc[idx_24m].astype(float).values
+        cutoff = predict_df.index[-1] - pd.DateOffset(months=24)
+        previous = predict_df.loc[:cutoff]
+        if previous.empty:
+            return {"error": "Less than 24 calendar months of complete feature history."}
+        vals_24m = previous[bic_selected].iloc[-1].astype(float).values
         prob_24m = _prob(res_bic.params.values, vals_24m)
         prob_change = bic_prob - prob_24m
 
@@ -936,17 +968,18 @@ def target_series(raw: pd.DataFrame) -> pd.Series:
 def walk_forward(
     raw: pd.DataFrame, *, oos_start: str = "1985-01-01", refit_every_months: int = 12,
 ) -> pd.Series:
-    """True out-of-sample ensemble probability (%), refit on expanding windows.
+    """Walk-forward ensemble on revised data, with approximate publication lags.
 
-    The ensemble here is the four forward models — NY Fed, Wright, BIC
-    (re-estimated) and Estrella-Mishkin (closed form). The nowcast panel is
+    The ensemble here is three locally re-estimated start-target models: NY Fed,
+    Wright and BIC. The frozen point-horizon benchmark is excluded. The nowcast panel is
     excluded. At each refit date the re-estimated models are fit using only
     observations whose label was already known by that date (t <= refit_ts - 12
     months; months already in recession carry no label and are dropped), then
     used to predict every month until the next refit. Each model is fit on rows complete for its own
     features and joins the ensemble once it has ``MIN_WINDOW`` such rows.
     Features are shifted by :data:`PUBLICATION_LAG_MONTHS`, so the prediction
-    dated ``t`` uses only data published by the end of month ``t``.
+    dated ``t`` approximates releases by month-end. Revised vintages and NBER
+    announcement lags remain sources of look-ahead.
 
     The BIC member's features are **reselected inside every refit** by
     :func:`select_bic_features` on that fold's training rows only, so neither
@@ -963,11 +996,6 @@ def walk_forward(
     wright_feats = [f for f in [spread_feat, "FEDFUNDS"] if f in available]
     base_specs = {"NY Fed": [spread_feat], "Wright": wright_feats}
     selections: dict[str, list[str]] = {}
-
-    em = (
-        pd.Series(_stats.norm.cdf(_EM_CONST + _EM_SPREAD * data["SPREAD"].values) * 100, index=data.index)
-        if "SPREAD" in data.columns else None
-    )
 
     start_ts = pd.Timestamp(oos_start)
     end_ts = data["TARGET"].last_valid_index()
@@ -1012,9 +1040,7 @@ def walk_forward(
                 if row.isna().any():
                     continue
                 vals.append(_prob(fitted[name], row.astype(float).values))
-            if em is not None and ts in em.index and np.isfinite(em.loc[ts]):
-                vals.append(float(em.loc[ts]))
-            if vals:
+            if len(vals) == 3:
                 monthly[ts] = float(np.mean(vals))
 
     out = pd.Series(monthly, name="ensemble_oos").sort_index()

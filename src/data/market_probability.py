@@ -1,8 +1,8 @@
 """Atlanta Fed Market Probability Tracker loader.
 
 The Atlanta Fed's Market Probability Tracker estimates, from CME options on
-SOFR futures, the market-implied distribution of the FOMC's policy rate after
-each of the next several quarterly contract expiries. See
+SOFR futures, risk-neutral distributions of three-month average SOFR over
+quarterly reference windows (not FOMC meeting outcomes). See
 https://www.atlantafed.org/cenfis/market-probability-tracker.
 
 The tracker is published behind a bot-blocking front end (and many deployment
@@ -17,7 +17,7 @@ CSV export rather than fetching live. Refresh it by replacing
 
 Columns:
     date                 snapshot date (when the market implied this)
-    reference_start_date meeting / reference-quarter start being priced
+    reference_start_date reference-quarter start being priced (legacy internal name: meeting_date)
     target_range         current target range at the snapshot (raw string)
     field                one of:
                            "Rate: mean" / "Rate: mode" /

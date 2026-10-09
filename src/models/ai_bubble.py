@@ -142,7 +142,7 @@ def equal_weight_index(closes: pd.DataFrame, tickers, *, start=None) -> pd.Serie
     cols = [t for t in tickers if t in closes.columns]
     if not cols:
         return pd.Series(dtype=float)
-    px = closes[cols]
+    px = closes[cols].dropna(how="all")
     if start is not None:
         px = px.loc[pd.Timestamp(start) :]
     # Bridge short gaps (holidays on one exchange); leading NaNs before a
@@ -158,7 +158,7 @@ def equal_weight_index(closes: pd.DataFrame, tickers, *, start=None) -> pd.Serie
 def ratio(closes: pd.DataFrame, num: str, den: str) -> pd.Series:
     if num not in closes.columns or den not in closes.columns:
         return pd.Series(dtype=float)
-    df = closes[[num, den]].ffill(limit=3).dropna()
+    df = closes[[num, den]].dropna(how="all").ffill(limit=3).dropna()
     return (df[num] / df[den]).rename(f"{num}/{den}")
 
 
@@ -178,7 +178,8 @@ def breadth(closes: pd.DataFrame, tickers, window: int) -> pd.Series:
     cols = [t for t in tickers if t in closes.columns]
     if not cols:
         return pd.Series(dtype=float)
-    px = closes[cols].ffill(limit=3)
+    # Other exchanges' dates must not create extra sessions for this basket.
+    px = closes[cols].dropna(how="all").ffill(limit=3)
     ma = px.rolling(window, min_periods=window).mean()
     valid = ma.notna() & px.notna()
     above = (px > ma) & valid

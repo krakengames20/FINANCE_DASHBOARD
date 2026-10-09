@@ -72,6 +72,19 @@ def fetch_log() -> dict[str, dict]:
         return {k: dict(v) for k, v in _LOG.items()}
 
 
+def restore_fetch_log(entries: dict[str, dict]) -> None:
+    """Restore metadata carried with cached readings without changing fetch times.
+
+    A module reload can reset the in-memory log while Streamlit retains model
+    resources. Never replace a newer fetch or failure with an older cache entry.
+    """
+    with _lock:
+        for sid, entry in entries.items():
+            previous = _LOG.get(sid)
+            if previous is None or entry["fetched_at"] > previous["fetched_at"]:
+                _LOG[sid] = dict(entry)
+
+
 def clear_log() -> None:
     with _lock:
         _LOG.clear()
