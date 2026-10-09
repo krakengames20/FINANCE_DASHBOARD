@@ -48,6 +48,9 @@ def render(
     )
     composite = composite_risk(ensemble_now, lame_now, curve_now)
 
+    from src.ui.business_cycle import render as render_business_cycle
+
+    render_business_cycle(panel)
     _row_one(current, history, lame_hist, spreads)
     _row_policy_path(market_prob)
     _row_two(history, lame_hist, spreads, nber)

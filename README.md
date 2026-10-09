@@ -34,6 +34,17 @@ LAME's expanding-window z-scoring requires a minimum of 60 monthly observations.
 
 A full **Methodology** tab is built into the dashboard itself — it auto-generates the data sources table from the registry and shows the feature set retained by the live fit, so it cannot drift from the code. See also [`notebooks/methodology.ipynb`](notebooks/methodology.ipynb) for a step-by-step walkthrough including a side-by-side comparison against a naive base-rate baseline.
 
+## Business cycle overview
+
+The main dashboard starts with **Business cycle at a glance**: four plain-language,
+dated answers about reported growth, its change in speed, spreading weakness, and
+inflation. It reuses the existing GDP/GDI, Chicago Fed activity/diffusion, and core
+PCE inputs. Quarterly growth and monthly context are kept distinct, disagreements
+are shown, and old or incomplete comparisons are withheld. The expandable evidence
+guide explains annual rates, the descriptive thresholds, and how slowing differs
+from contracting. This overview is descriptive; it does not change the recession
+forecast or add another score.
+
 ## Calibration
 
 Brier score and AUC are reported on the Methodology page, both in-sample (section 9) and out-of-sample via the walk-forward backtest (section 10), each with a decile reliability diagram and a base-rate skill score. The Recession page's *Under the Hood* tab shows the per-model comparison and indicator percentiles.
