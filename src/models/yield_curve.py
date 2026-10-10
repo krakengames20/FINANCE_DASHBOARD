@@ -130,7 +130,7 @@ class YieldCurve:
                 "hit_rate": (0, 0),
             }
 
-        monthly = spreads["spread_10y3m"].resample("ME").mean().dropna()
+        monthly = spreads["spread_10y3m"].resample("ME").mean()
         inverted = monthly < 0
 
         # Current consecutive run of inverted months at the tail.
@@ -157,22 +157,28 @@ class YieldCurve:
         peaks = _nber_peaks(nber_monthly)
 
         hits = 0
+        pending = 0
         leads = []
+        last_outcome = nber_monthly.dropna().index.max()
+        outcome_through = last_outcome.to_period("M") if pd.notna(last_outcome) else None
         for start_idx, _end_idx in episodes:
-            start_date = monthly.index[start_idx]
+            start_date = monthly.index[start_idx].to_period("M")
             # Look for the next NBER peak within 36 months.
-            future_peaks = [p for p in peaks if 0 <= (p - start_date).days / 30.5 <= 36]
+            future_peaks = [p for p in peaks if 0 <= p.to_period("M").ordinal - start_date.ordinal <= 36]
             if future_peaks:
                 hits += 1
-                lead = (future_peaks[0] - start_date).days / 30.5
+                lead = future_peaks[0].to_period("M").ordinal - start_date.ordinal
                 leads.append(lead)
+            elif outcome_through is None or outcome_through.ordinal - start_date.ordinal < 36:
+                pending += 1
 
         avg_lead = float(np.mean(leads)) if leads else float("nan")
         return {
             "months_inverted": int(months_inverted),
             "max_depth_current": max_depth_current,
             "avg_lead_to_recession": avg_lead,
-            "hit_rate": (hits, len(episodes)),
+            "hit_rate": (hits, len(episodes) - pending),
+            "pending_episodes": pending,
         }
 
 
@@ -206,11 +212,14 @@ def _runs(flags: pd.Series) -> list[tuple[int, int]]:
 
 
 def _nber_peaks(nber_monthly: pd.Series) -> list[pd.Timestamp]:
-    """Identify NBER peak months (transitions from False to True)."""
+    """USREC's first True month follows the peak; do not invent a peak at sample start."""
     peaks = []
-    prev = False
+    prev = None
     for ts, val in nber_monthly.items():
-        if val and not prev:
-            peaks.append(ts)
+        if pd.isna(val):
+            prev = None
+            continue
+        if val and prev is False:
+            peaks.append(ts - pd.DateOffset(months=1))
         prev = bool(val)
     return peaks

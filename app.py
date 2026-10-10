@@ -13,6 +13,7 @@ from src.data.fred_client import fetch_panel
 from src.data.nber import load_recession_flags
 from src.data.series_registry import fred_ids
 from src.models.composite import composite_risk
+from src.data import freshness
 from src.models.lame import LAME
 from src.models.recession_probit import compute_probit_report
 from src.models.yield_curve import YieldCurve
@@ -20,6 +21,7 @@ from src.ui.glossary import info_icon_html
 from src.ui.theme import PALETTE, inject_theme, risk_color
 from src.ui.views import ai_bubble, credit, curve, dashboard, early_warning, growth, methodology, pulse, rate_path, recession
 from src.ui.views import lame as lame_view
+from src.ui.views import google_trends
 
 
 st.set_page_config(
@@ -29,7 +31,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-NAV_OPTIONS = ["Macro Dashboard", "Early Warning", "Recession", "Yield Curve", "Credit", "Labor", "Growth", "Pulse", "Policy Path", "AI Bubble", "Methodology"]
+NAV_OPTIONS = ["Macro Dashboard", "Early Warning", "Recession", "Yield Curve", "Credit", "Labor", "Growth", "Pulse", "Policy Path", "AI Bubble", "Google Trends", "Methodology"]
 
 inject_theme()
 
@@ -105,6 +107,7 @@ def _build_models(cache_version: str) -> dict:
         "yield_curve": yc,
         "panel": panel,
         "nber": nber,
+        "fetch_log": freshness.fetch_log(),
     }
 
 
@@ -117,6 +120,7 @@ def _load_probit_report(cache_version: str) -> dict:
     probability = report.get("ensemble_probability")
     if probability is None or not math.isfinite(float(probability)):
         raise RuntimeError("The recession model returned a non-finite probability.")
+    report["fetch_log"] = freshness.fetch_log()
     return report
 
 
@@ -124,7 +128,7 @@ def _load_probit_report(cache_version: str) -> dict:
 
 
 def _probit_ensemble_now(models: dict) -> float:
-    """Headline probability (from the four-model probit ensemble) that a new
+    """Headline probability (from the three-model probit ensemble) that a new
     recession starts within 12 months."""
     probit = models.get("probit") or {}
     if not probit or "error" in probit:
@@ -189,10 +193,11 @@ def _header(models: dict | None) -> None:
         try:
             comp = _composite_now(models)
             color = risk_color(comp["band"])
+            shown_comp = f"{comp['composite']:.0f}" if math.isfinite(comp["composite"]) else "—"
             composite_html = (
                 f'<div class="composite-readout">'
                 f'<div class="label-tiny">Composite Risk{info_icon_html("Composite Risk", align="left")}</div>'
-                f'<div class="composite-number" style="color:{color};">{comp["composite"]}</div>'
+                f'<div class="composite-number" style="color:{color};">{shown_comp}</div>'
                 f'<div class="risk-badge" style="color:{color};margin-top:6px;">{comp["band"]}</div>'
                 f"</div>"
             )
@@ -304,7 +309,7 @@ def _nav() -> str:
     selected = option_menu(
         menu_title=None,
         options=NAV_OPTIONS,
-        icons=["grid", "exclamation-triangle", "graph-down", "activity", "bank", "people", "graph-up", "reception-4", "signpost-split", "cpu", "book"],
+        icons=["grid", "exclamation-triangle", "graph-down", "activity", "bank", "people", "graph-up", "reception-4", "signpost-split", "cpu", "search", "book"],
         orientation="horizontal",
         default_index=default_index,
         manual_select=manual_select,
@@ -337,14 +342,17 @@ def main() -> None:
             # Bump this version string whenever model code changes — Streamlit's
             # cache_resource doesn't track imported modules, so a code edit to
             # e.g. src/models/lame.py won't otherwise invalidate the cached fit.
-            cache_version = "v18-recession-recovery"
+            cache_version = "v20-financial-audit-metadata"
             models = dict(_build_models(cache_version))
     except Exception as exc:
         _header(None)
-        # The AI Bubble tab runs on Yahoo prices, not the FRED models, so it
-        # stays usable when FRED is down or the key is missing.
-        if _nav() == "AI Bubble":
+        # These tabs use independent feeds and remain usable if FRED is down.
+        selected = _nav()
+        if selected == "AI Bubble":
             ai_bubble.render()
+            return
+        if selected == "Google Trends":
+            google_trends.render()
             return
         st.error(
             f"Failed to initialise the dashboard: {exc}. "
@@ -360,6 +368,9 @@ def main() -> None:
         models["probit"] = {"error": str(exc)}
 
     market_prob = _load_market_prob()
+
+    freshness.restore_fetch_log(models.get("fetch_log", {}))
+    freshness.restore_fetch_log(models.get("probit", {}).get("fetch_log", {}))
 
     _header(models)
     _data_status_bar()
@@ -389,13 +400,15 @@ def main() -> None:
         rate_path.render(market_prob, models["nber"])
     elif selected == "AI Bubble":
         ai_bubble.render()
+    elif selected == "Google Trends":
+        google_trends.render()
     elif selected == "Methodology":
         methodology.render(models.get("probit"))
 
     st.markdown(
         f'<div style="margin-top:48px;padding-top:16px;border-top:1px solid {PALETTE["panel_border"]};'
         f'color:{PALETTE["text_tiny"]};font-size:10px;letter-spacing:0.2em;text-transform:uppercase;">'
-        "Data · FRED  ·  Recession dates · NBER  ·  Policy path · Atlanta Fed  ·  AI Bubble prices · Yahoo Finance  ·  This is research, not investment advice."
+        "Data · FRED  ·  Recession dates · NBER  ·  Policy path · Atlanta Fed  ·  AI Bubble prices · Yahoo Finance  ·  Search interest · Google Trends  ·  This is research, not investment advice."
         "</div>",
         unsafe_allow_html=True,
     )

@@ -241,7 +241,7 @@ def _philosophy() -> None:
         "number that has been spectacularly wrong in plausibly-distinguishable regimes; "
         "or they aggregate everything into one opaque black-box probability that you "
         "cannot interrogate.</p>"
-        "<p>This dashboard takes a different approach. It surfaces <b>three independent "
+        "<p>This dashboard takes a different approach. It surfaces <b>three complementary "
         "lenses</b>: a probit ensemble across 30+ FRED series, a labor-market composite, "
         "and a yield-curve module. Each can be opened and decomposed. When they agree, the "
         "signal is strong. When they disagree, the disagreement itself is the insight.</p>"
@@ -252,7 +252,7 @@ def _philosophy() -> None:
         "<p><b>What this is — and isn't.</b> The aim is <i>context and early warning</i>: regime "
         "awareness, decomposable signals, and avoiding the single-indicator mistakes above. It is "
         "<b>not</b> a claim to out-predict the <i>timing</i> of recessions — macro forecasting is "
-        "genuinely hard, and the calibrated probabilities here are most useful as risk context and "
+        "hard, and the model probabilities here are most useful as risk context and "
         "a how-close read, not as a date.</p>"
         "</div></div>",
         unsafe_allow_html=True,
@@ -389,7 +389,8 @@ def _labor_section() -> None:
         "positive values always indicate expansion.</p>"
         "<p><b>Step 1 — Transform.</b> Each indicator is resampled to month-end and "
         "transformed per the registry (level, year-over-year, 3-month difference, 4-period "
-        "moving average).</p>"
+        "moving average). Initial claims are averaged across four weekly observations "
+        "before taking the month-end reading.</p>"
         "<p><b>Step 2 — Z-score.</b> Each indicator is z-scored using its own "
         "expanding-window mean and standard deviation, requiring at least 60 monthly "
         "observations before the first z-score is produced:</p>"
@@ -411,7 +412,8 @@ def _labor_section() -> None:
         "where indicator coverage is at least 70% of peak, so the reading is not anchored "
         "on a stub month with only two series.</p>"
         "<p><b>Sahm Rule.</b> Shown alongside the composite: the 3-month moving average of the "
-        "unemployment rate minus its trailing 12-month minimum, which fires at <b>+0.5pp</b>. We use "
+        "unemployment rate minus the minimum of those averages in the previous twelve months, "
+        "which fires at <b>+0.5pp</b>. We use "
         "FRED's real-time series (<code>SAHMREALTIME</code>), so it carries no look-ahead and isn't "
         "revised. Bands: &lt;0.2 low · 0.2–0.4 warming · 0.4–0.5 watch · ≥0.5 triggered.</p>"
         "<p><b>Wage tracker.</b> The Atlanta Fed Wage Growth Tracker (median, 12-month MA) gauges "
@@ -444,13 +446,12 @@ def _labor_section() -> None:
 # ---------------------------------------------------------------- recession
 
 
-# Four forward (recession-start) models that form the ensemble, plus the
-# "in recession now" nowcast indicators shown separately.
+# Three start-target models, plus separate point-horizon and nowcast benchmarks.
 _PROBIT_MODELS = [
     ("NY Fed", "10y-3m term spread", "Re-estimated probit", "Estrella & Mishkin (1998)"),
     ("Wright", "Spread + fed funds rate", "Re-estimated probit", "Wright (2006)"),
     ("BIC-selected", "Spread + ≤3 stationary indicators, sign-restricted", "Forward-stepwise BIC (cap 4)", "Estrella & Mishkin (1998); Liu & Moench (2016)"),
-    ("Estrella-Mishkin", "10y-3m term spread", "Closed form, frozen 2006 params", "Estrella & Trubin (2006)"),
+    ("Estrella-Mishkin", "10y-3m bond-equivalent spread", "Frozen 2006 point-horizon benchmark — excluded", "Estrella & Trubin (2006)"),
 ]
 _PROBIT_BENCHMARK = ("Chauvet-Piger", "Markov-switching (coincident)", "FRED RECPROUSM156N — nowcast panel, not in ensemble", "Chauvet & Piger")
 _NOWCAST_SAHM = ("Sahm rule", "Real-time unemployment trigger (≥ 0.50 pp)", "FRED SAHMREALTIME — nowcast panel, not in ensemble", "Sahm (2019)")
@@ -461,11 +462,11 @@ def _recession_section(probit: dict | None) -> None:
     st.markdown(
         '<div class="panel"><div class="panel-body" style="font-size:13px;line-height:1.7;'
         f'color:{PALETTE["text_primary"]};">'
-        "<p>The headline probability is the equal-weighted mean of four "
+        "<p>The headline probability is the equal-weighted mean of three "
         "<b>methodologically distinct</b> models, each estimating the probability that a "
         "<b>new NBER recession starts within the next 12 months</b>, over a shared FRED universe. "
-        "Diversifying across model structure — from a single-variable yield-curve probit to a "
-        "multivariate BIC model — guards against any one specification's blind spot. A separate "
+        "The specifications vary from a spread-only probit to a multivariate BIC model, but "
+        "all share the yield curve and can share its blind spots. A separate "
         "<i>nowcast panel</i> (Chauvet–Piger and the Sahm rule) answers \"are we in a recession "
         "now?\"; it is descriptive only and excluded from the average (see below).</p>"
 
@@ -539,20 +540,20 @@ def _recession_section(probit: dict | None) -> None:
         "(section 11) <b>reselects inside every refit</b>, using only that fold's training data.</li>"
         "</ul>"
 
-        "<p><b>5 · The four models.</b> Three are re-estimated on our data (on the start-dated "
-        "target); one is frozen:</p>"
+        "<p><b>5 · Three models and a separate benchmark.</b> Three are re-estimated on our data (on the start-dated "
+        "target). The frozen model is displayed separately:</p>"
         '<pre style="background:#0d1117;padding:10px;color:#d4d4d0;font-size:12px;">'
         "NY Fed            Φ(β0 + β·SPREAD)                   re-estimated\n"
         "Wright (2006)     Φ(β0 + β1·SPREAD + β2·FEDFUNDS)    re-estimated\n"
         "BIC-selected      Φ(β0 + β′x_BIC), ≤ 4 features      re-estimated, sign-restricted\n"
-        "Estrella–Mishkin  Φ(−0.6045 − 0.7374·SPREAD)         frozen (Estrella–Trubin 2006)"
+        "Estrella–Mishkin  Φ(−0.6045 − 0.7374·SPREAD_BEY)     separate point-horizon benchmark"
         "</pre>"
         "<p>Estrella–Mishkin keeps its published constants, which were estimated for a different "
         "target (recession in the month 12 months ahead) on data that overlaps the backtest "
-        "window, so it is neither re-fit to the start-dated target nor fully out-of-sample.</p>"
+        "window, so it is excluded from both the ensemble and walk-forward backtest. SPREAD_BEY converts TB3MS to a bond-equivalent yield before subtraction from GS10.</p>"
 
-        "<p><b>6 · Aggregation.</b> Equal-weighted mean of the four forward probabilities — "
-        "deliberately avoiding letting the yield curve dominate when it disagrees with the broader "
+        "<p><b>6 · Aggregation.</b> Equal-weighted mean of the three start-target probabilities, scored at a common month. "
+        "All three models include the yield curve and are correlated; equal weights do not create independent evidence from the broader "
         "panel.</p>"
 
         "<p><b>7 · Uncertainty.</b> A 90% interval on the BIC model comes from a "
@@ -587,7 +588,7 @@ def _recession_section(probit: dict | None) -> None:
         for name, feats, method, ref in [*_PROBIT_MODELS, _PROBIT_BENCHMARK, _NOWCAST_SAHM]
     )
     st.markdown(
-        '<div class="label-small" style="margin-top:12px;">Four-model ensemble + nowcast panel (not in ensemble)</div>'
+        '<div class="label-small" style="margin-top:12px;">Three-model ensemble + separate benchmarks</div>'
         f'<div class="panel"><div class="panel-body">{body}</div></div>',
         unsafe_allow_html=True,
     )
@@ -685,13 +686,13 @@ def _policy_path_section() -> None:
         "<p>The <b>Policy Path</b> tab surfaces the Atlanta Fed's "
         '<a href="https://www.atlantafed.org/cenfis/market-probability-tracker" '
         f'style="color:{PALETTE["accent"]};">Market Probability Tracker</a>, which backs out the '
-        "market-implied probability distribution of the FOMC policy rate after each upcoming "
+        "risk-neutral distribution of three-month compounded average SOFR over each upcoming "
         "quarterly contract from CME options on SOFR futures. It is a forward-looking, "
         "market-priced complement to the (spot) Yield Curve module.</p>"
         "<p><b>What we show.</b> For the latest snapshot: a fan chart of the published mean path "
         "with its 25th–75th percentile band; a comparison of the mean path across recent "
         "snapshots (how expectations have re-priced); a heatmap of the probability on each 25bp "
-        "target range per meeting; and the next-meeting hike/cut odds. The mean, mode, and "
+        "rate range per reference quarter; and quarter-average above/below-range probabilities. The mean, mode, and "
         "percentiles are taken <i>directly</i> from the Atlanta Fed export — we do not re-estimate "
         "the distribution.</p>"
         "<p><b>Why it is not a recession input.</b> It measures market <i>expectations</i> of "
@@ -851,19 +852,17 @@ def _walk_forward_section(probit: dict | None) -> None:
         '<div class="panel"><div class="panel-body" style="font-size:13px;line-height:1.7;'
         f'color:{PALETTE["text_primary"]};">'
         "<p>In-sample Brier/AUC overstate what a real-time forecaster would have achieved. "
-        "The walk-forward backtest fixes this: at each refit date the re-estimated models "
+        "The walk-forward backtest reduces estimation and selection look-ahead: at each refit date the re-estimated models "
         "(NY Fed, Wright, BIC) are fit using only observations whose start-dated label (an NBER "
         "peak in <code>t+1 … t+12</code>) was already known by that date — i.e. month "
         "<code>t</code> enters training only once <code>t+12 ≤ refit date</code>, so a label "
         "that wouldn't yet have been observed can't leak in. Months already in a recession "
         "(peak month through trough) are dropped from both training and scoring.</p>"
-        "<p><b>What is not out-of-sample.</b> Estrella-Mishkin is a closed form with constants "
-        "published in 2006: they were estimated on data that overlaps roughly 1989–2005 of this "
-        "window, and for a different target, so that member is not fully out-of-sample. "
-        "Chauvet-Piger is not in the ensemble or this backtest; it is FRED's smoothed series, "
-        "re-estimated with each data vintage, so its history is <b>not</b> a real-time or "
-        "out-of-sample record either. NBER turning points are taken as dated today; the "
-        "NBER's announcement lag is not modelled.</p>"
+        "<p><b>Revised data, not a real-time simulation.</b> Predictors use today's FRED vintage "
+        "with approximate release lags. NBER dates use today's chronology, without announcement "
+        "lags. These results therefore retain revision and dating look-ahead. Estrella-Mishkin "
+        "is excluded: its 2006 coefficients were estimated through December 2005 and predict a "
+        "different target. Chauvet-Piger is a separate smoothed nowcast, also excluded.</p>"
         "<p><b>Protocol.</b> Annual refits starting <code>1985-01-01</code>; the most recent fit "
         "scores every month until the next refit. Each model is fit on the rows complete for "
         "<i>its own</i> features and joins the ensemble once it has 120 such labelled rows under "
@@ -871,7 +870,7 @@ def _walk_forward_section(probit: dict | None) -> None:
         "panel below. Features are shifted to their approximate publication dates (most "
         "monthly macro series one month, quarterly GDP four months after the quarter's first "
         "month; market rates none), so the prediction dated month <code>t</code> uses only data "
-        "public by the end of <code>t</code>. The BIC member's <i>features</i> are reselected at "
+        "approximately available by the end of <code>t</code>; revisions remain. The BIC member's <i>features</i> are reselected at "
         "every refit using only that fold's training rows (the same pre-registered rule as the "
         "live model: spread forced, stationary sign-restricted candidates, at most 4 features), "
         "so neither selection nor coefficients see labels that were not yet observed.</p>"
@@ -1070,10 +1069,11 @@ def _growth_section() -> None:
         "<p><b>Coincident growth factor (the one original model).</b> Deliberately the simplest "
         "thing that works: take payrolls (<code>PAYEMS</code>), industrial production "
         "(<code>INDPRO</code>), retail sales (<code>RSAFS</code>), and real consumption "
-        "(<code>PCEC96</code>) year-over-year; z-score each over the common sample; average the "
+        "(<code>PCEC96</code>) year-over-year; z-score each over its own full revised sample; average the "
         "available z-scores per month. The result is a unitless momentum gauge (0 = trend, positive "
         "= above trend), not a GDP forecast — a transparent corroboration for the nowcast, not a "
-        "black-box DFM. The tab validates it two ways: a scatter of the factor against the GDP "
+        "black-box DFM. Its past normalization uses later observations, and retail sales are "
+        "nominal while real consumption is inflation-adjusted. The tab describes it two ways: a scatter of the factor against the GDP "
         "print (it should slope up), and an overlay against the recession-start probability "
         "(they move inversely — weak current momentum coincides with elevated forward risk).</p>"
         "<p><b>Revisions, measured right.</b> The real-time-vs-revised panel compares the "
@@ -1096,9 +1096,11 @@ def _credit_section() -> None:
         "composite</b> — high-yield and investment-grade OAS, the Baa–10y spread, the Chicago Fed "
         "conditions index (NFCI), the St. Louis stress index (STLFSI), and the SLOOS net share of "
         "banks tightening C&amp;I standards. Each is resampled to month-start and oriented so higher "
-        "= more stress, then z-scored over the common 1997+ sample and averaged:</p>"
+        "= more stress, then z-scored over each series' own available revised history and averaged. "
+        "The history is descriptive: its normalization uses later observations, and components "
+        "have different start dates. ICE OAS feeds currently provide only three years.</p>"
         '<pre style="background:#0d1117;padding:10px;color:#d4d4d0;font-size:12px;">'
-        "z_i = (x_i − mean(x_i)) / std(x_i)     over the common 1997+ sample\n"
+        "z_i = (x_i − mean(x_i)) / std(x_i)     each series' full available sample\n"
         "stress_t = mean_i z_i(t)               (averaged over the series available that month)"
         "</pre>"
         "<p>The quarterly SLOOS series is forward-filled up to two months so it aligns with the "
@@ -1221,7 +1223,7 @@ def _limitations() -> None:
         (
             "In-sample headline · mitigated.",
             "The default reading is fit on the full sample (start-dated target). The walk-forward backtest "
-            "(section 11) is computed at app startup and surfaces true out-of-sample "
+            "(section 11) is computed at app startup and surfaces walk-forward revised-data "
             "Brier / AUC / reliability — use that for honest predictive performance, not "
             "the in-sample headline.",
         ),
@@ -1233,13 +1235,13 @@ def _limitations() -> None:
             "Chauvet–Piger is smoothed and revised each vintage (not real-time).",
         ),
         (
-            "Target definition · start-dated, with one frozen exception.",
+            "Target definition · all ensemble members are start-dated.",
             "The dependent variable is <code>y_t = 1</code> if an NBER peak falls in "
             "<code>t+1</code> … <code>t+12</code> (a new recession starts within 12 months); months "
             "from the peak through the trough are excluded. The re-estimated models (NY Fed, "
             "Wright, BIC) are trained on this target; the closed-form <b>Estrella–Mishkin</b> model "
-            "keeps its frozen 2006 point-in-time coefficients, so it sits on a different basis "
-            "within the ensemble and is not calibrated to the start-dated target. Only four NBER "
+            "keeps its frozen 2006 point-horizon coefficients and is displayed separately "
+            "outside the ensemble and backtest. Only four NBER "
             "peaks fall inside the out-of-sample window, so every backtest statistic rests on "
             "very few events.",
         ),
@@ -1269,8 +1271,8 @@ def _limitations() -> None:
         (
             "Model comparison · fully live.",
             "The model comparison is computed live from FRED on every rebuild — no "
-            "hand-entered street estimates. The four ensemble members are probit specifications "
-            "(three re-estimated on the FRED panel, one frozen). The nowcast panel's "
+            "hand-entered street estimates. The three ensemble members are locally re-estimated probit specifications "
+            "(not official institutional forecasts). The nowcast panel's "
             "Chauvet–Piger reading is FRED's smoothed Markov-switching series "
             "(<code>RECPROUSM156N</code>) and is not a member.",
         ),
@@ -1301,7 +1303,7 @@ def _reproducibility() -> None:
         f'style="color:{PALETTE["accent"]};">github.com/SecondOrderEdge/Macro-Dashboard</a>. '
         "MIT licensed. No hidden constants — anything we assert here is in the code.</p>"
         "<p><b>Tests.</b> 63 deterministic pytest cases cover probability bounds, the "
-        "four-model ensemble, BIC selection and sign constraints, walk-forward calibration, "
+        "three-model ensemble, BIC selection and sign constraints, walk-forward calibration, "
         "z-score normalisation, weight summation, spread calculation, inversion detection, "
         "composite banding, and the Market Probability Tracker CSV parser. Tests use synthetic "
         "or bundled data and never hit external APIs.</p>"

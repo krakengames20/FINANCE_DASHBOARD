@@ -1,6 +1,6 @@
 # U.S. Macro Dashboard
 
-> A unified view of U.S. recession risk through three independent macro lenses.
+> A unified view of U.S. recession risk through three complementary macro lenses.
 
 ![status](https://img.shields.io/badge/status-live-5ba3a3)
 ![python](https://img.shields.io/badge/python-3.11+-d4a574)
@@ -12,13 +12,13 @@
 
 A single-indicator recession model gives you a precise number and the false comfort of a precise number. The 10-year/3-month yield curve has the best track record of any single signal in the post-war U.S. sample, and it has nonetheless run hot for stretches when the rest of the economy was demonstrably fine. Street estimates routinely disagree by twenty or thirty percentage points without disclosing what is driving the spread.
 
-The dashboard responds with three independent lenses that can disagree readably. A four-model probit ensemble (NY Fed, Wright, BIC-selected, Estrella–Mishkin) estimates 12-month recession probability live from a 37-series FRED universe, with Chauvet–Piger shown alongside as a coincident benchmark. A 10-indicator labor composite (LAME) summarises the regime in a single inverse-volatility-weighted z-score. A yield-curve module exposes the term structure and inversion statistics directly. The headline is a 0–100 composite built from a 50/25/25 weighted blend.
+The dashboard presents three complementary lenses. A three-model recession-start ensemble (local term-spread, Wright-style, and BIC-selected probits) estimates the probability of an NBER peak within 12 months, with the frozen Estrella–Mishkin point-horizon model and Chauvet–Piger coincident nowcast shown separately. A 10-indicator labor composite (LAME) summarizes labor conditions in an inverse-volatility-weighted z-score. The yield-curve module exposes Treasury yields and inversion statistics. The 0–100 headline composite is a judgmental 50/25/25 index, not a calibrated probability.
 
 What's novel — for a public dashboard — is the transparent decomposition. Every cell of the headline can be opened: each model reports its probability, the watchlist reports the exact indicator value that would trip a higher reading, and the LAME breakdown shows the z-score, weight, and contribution of each of its ten indicators. When the models disagree, the disagreement is auditable.
 
 ## The three modules
 
-**Recession ensemble.** Four methodologically distinct 12-month-ahead probit specifications — NY Fed (term spread), Wright (spread + fed funds), BIC-selected (sign-constrained multivariate), and Estrella–Mishkin (closed form) — estimated over a shared 37-series FRED universe on an expanding window from 1967; the ensemble probability is their arithmetic mean. Chauvet–Piger (FRED's smoothed Markov-switching series) is reported alongside as a *coincident* benchmark and excluded from the average so forecast horizons aren't blended. Calibration is measured by Brier score and AUC both in-sample and via a walk-forward backtest, each with a reliability diagram.
+**Recession ensemble.** Three locally re-estimated start-target probits (term spread; spread plus fed funds; sign-constrained BIC model) over a 38-series FRED universe. Members are scored at one common month and averaged equally. Estrella–Mishkin predicts recession in month 12 using frozen 2006 coefficients and a bond-equivalent bill yield; it is excluded from the ensemble and backtest. Chauvet–Piger is a separate coincident nowcast. Brier scores and AUC describe in-sample fits and a walk-forward exercise on revised data with approximate publication lags; this is not a real-time vintage backtest.
 
 **LAME — Labor Aggregate Market Engine.** Ten labor indicators (`UNRATE`, `ICSA`, `CCSA`, `JTSJOL`, `JTSQUR`, `AWHAETP`, `TEMPHELPS`, `PAYEMS`, `U6RATE`, `CIVPART`) are transformed per the registry, signed so that positive means expansionary, z-scored against their own expanding-window history, and combined with inverse-volatility weights computed from a rolling 5-year window.
 
@@ -28,11 +28,22 @@ What's novel — for a public dashboard — is the transparent decomposition. Ev
 
 The BIC-selected model is built by forward-stepwise selection over the full FRED universe: a candidate feature is accepted only if it improves BIC, does not induce quasi-complete separation, and keeps every coefficient on the economically correct side (lower spread → higher risk; rising unemployment → higher risk; weaker sentiment and contracting credit → higher risk). The NY Fed and Wright models are re-estimated probits on fixed feature sets; Estrella–Mishkin uses frozen 2006 coefficients; Chauvet–Piger is FRED's published `RECPROUSM156N`.
 
-The dependent variable is the within-12-months NBER target (`y_t = 1` if `USREC = 1` in any month from `t+1` to `t+12`) — matching how the headline "12-month recession probability" is read. Estimation uses an expanding sample from 1967 onward. The ensemble is the simple arithmetic mean of the four forward-model probabilities (Estrella–Mishkin keeps its frozen point-in-time coefficients). The walk-forward backtest only trains on observations whose 12-month-ahead label was already observable at each refit date, so future labels can't leak in; BIC feature selection is done once on the full sample (an in-sample-selection caveat noted on the methodology page).
+The dependent variable is start-dated: `y_t = 1` if an NBER peak falls in `t+1` through `t+12`. Peak-through-trough months and unobserved future windows are excluded. Estimation starts in 1967. At each walk-forward refit, labels must be at least 12 months old and BIC selection is repeated using that fold's training data. Revised FRED vintages and NBER announcement delays remain sources of look-ahead. The BIC 90% pairs-bootstrap interval is indicative: overlapping labels, serial dependence and selection uncertainty are not captured.
 
 LAME's expanding-window z-scoring requires a minimum of 60 monthly observations. Inverse-volatility weights are computed from the rolling 5-year volatility of each signed z-score; weights are normalised to sum to 1 at every date, with indicators with missing readings dropping out of the basket for that month.
 
 A full **Methodology** tab is built into the dashboard itself — it auto-generates the data sources table from the registry and shows the feature set retained by the live fit, so it cannot drift from the code. See also [`notebooks/methodology.ipynb`](notebooks/methodology.ipynb) for a step-by-step walkthrough including a side-by-side comparison against a naive base-rate baseline.
+
+## Business cycle overview
+
+The main dashboard starts with **Business cycle at a glance**: four plain-language,
+dated answers about reported growth, its change in speed, spreading weakness, and
+inflation. It reuses the existing GDP/GDI, Chicago Fed activity/diffusion, and core
+PCE inputs. Quarterly growth and monthly context are kept distinct, disagreements
+are shown, and old or incomplete comparisons are withheld. The expandable evidence
+guide explains annual rates, the descriptive thresholds, and how slowing differs
+from contracting. This overview is descriptive; it does not change the recession
+forecast or add another score.
 
 ## Calibration
 
@@ -49,11 +60,14 @@ cp .env.example .env
 streamlit run app.py
 ```
 
-The first load fetches the FRED panel, fits the four-model ensemble, and runs the walk-forward backtest (tens of seconds); subsequent loads come from Streamlit's cache for six hours. Tests run with `pytest` and do not require network access.
+On Windows, after installing dependencies into `.venv`, run `./run-dashboard.cmd`.
+The launcher uses the project's Python directly, so PowerShell activation is not required.
 
-## Recession page — four-model probit ensemble + benchmark
+The first load fetches the FRED panel, fits the three-model ensemble, and runs the walk-forward backtest (tens of seconds); subsequent loads come from Streamlit's cache for six hours. Tests run with `pytest` and do not require network access.
 
-The Recession page averages four methodologically distinct, academically grounded 12-month-ahead models over a shared FRED universe: **NY Fed** (term-spread probit), **Wright** (spread + fed funds), **BIC-selected** (sign-constrained multivariate probit), and **Estrella–Mishkin** (closed form). **Chauvet–Piger** (FRED's smoothed Markov-switching series `RECPROUSM156N`) is shown beside them as a coincident benchmark — it nowcasts whether we're in recession now, a different horizon — and is excluded from the ensemble average. The page also reports a bootstrap 90% CI, per-indicator watchlist trigger levels, a 24-month trend attribution, and an interactive scenario tool. Every model probability is computed live from FRED — there are no hand-entered comparison values.
+## Recession page — three-model probit ensemble + benchmark
+
+The Recession page shows the three-model start-target ensemble and separate point-horizon and coincident benchmarks. It includes an indicative BIC bootstrap interval, trigger levels, a 24-calendar-month attribution, and an interactive scenario tool. Models labeled NY Fed and Wright are local adaptations, not official institutional forecasts. Signals are research outputs with judgmental bands.
 
 ## AI Bubble tab
 
@@ -78,6 +92,55 @@ cached for 1 hour and P/E for 6 hours; **↻ Refresh data** clears both. If `yfi
 installed it is used as a fallback for P/E. Credit and rates reuse the FRED client. The tab
 works even if FRED is unavailable.
 
+## Google Trends tab
+
+Type up to five terms and fetch a comparison over a rolling 1 year, 1 month,
+or 1 week, with a region selector and CSV download. This independent tab remains
+available when FRED or the market-price feed is unavailable.
+
+The Google Trends panel uses a headless browser to load the website's
+Explore page and capture its timeline JSON. Install `requirements.txt` and
+Chrome or Edge; on a server without either browser, run
+`python -m playwright install chromium`. No API key is needed. The
+[official API still requires alpha access](https://developers.google.com/search/apis/trends).
+Data is fetched only when **Fetch trends** is pressed and successful queries
+are cached for 1 hour, including a local cache shared with the sidecar under
+`.cache/google_trends/`. A dedicated browser profile under
+`.cache/google_trends/browser_profile/` saves cookies across restarts; it does
+not use your personal Chrome profile. Browser processes close after each fetch.
+The sidecar and dashboard share a process lock and allow at most one fresh
+fetch every 30 seconds. Only the timeline is requested: related widgets and
+automatic retries are suppressed. Google refusals pause browser fetching for
+30 minutes across processes; this is a local pause, not a guaranteed Google
+reset time. Browser fetching can still receive an IP-level 429 or a verification
+challenge, in which case it stops. Failed updates retain the previous chart
+and can use the same query's cached result for up to seven days, with a visible
+warning and the original terms, window, region, and fetch time.
+
+The original direct HTTP collector remains available for diagnostic checks
+with `--provider http`; it honors `HTTPS_PROXY` / `HTTP_PROXY`. The browser
+uses Chrome/Edge's normal network configuration.
+
+Scores are relative search interest, jointly normalized to 0–100 for the
+selected query, not search counts. Different windows or term sets are not
+directly comparable. Google chooses the sampling interval (normally weekly
+for a year, daily for a month, hourly for a week); unfinished periods are
+marked with open circles, and missing readings appear as gaps.
+
+The standalone sidecar remains available for independent testing:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run trends_sidecar.py --server.port 8511
+# Optional live check of all three windows; saves CSVs under .cache/google_trends
+.\.venv\Scripts\python.exe scripts/check_google_trends.py
+# Compare the original HTTP transport explicitly (also contacts Google)
+.\.venv\Scripts\python.exe scripts/check_google_trends.py --provider http --window "1 year"
+# Offline collector, chart, and interaction tests
+.\.venv\Scripts\python.exe -m pytest tests/test_google_trends.py tests/test_google_trends_browser.py
+# Real headless browser against local fixture data; does not contact Google
+.\.venv\Scripts\python.exe scripts/check_google_trends_browser.py
+```
+
 ## Data notes
 
 - Recession dates are sourced live from FRED's `USREC` (NBER-based recession indicator), falling back to the bundled `data/nber_recessions.csv` if the fetch is unavailable.
@@ -92,3 +155,5 @@ This is a research project. Not investment advice. No warranty.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+Financial verification completed on 9 October 2026. See `docs/financial_model_audit_2026-10-09.html` for findings, remaining limitations, and the source checks. Reproduce live data checks with `.venv\Scripts\python.exe scripts/audit_financial_data.py`; add `--cached` to reuse the saved audit snapshot without network calls.

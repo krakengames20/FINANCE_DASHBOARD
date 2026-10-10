@@ -15,14 +15,14 @@ VIEWS = Path(__file__).resolve().parents[1] / "src" / "ui" / "views"
 RENDERED_LABELS = [
     "Composite Risk",
     "Probability a new recession starts within 12 months",
-    "Probability a new recession starts within 12 months · 4-model ensemble",
+    "Probability a new recession starts within 12 months · 3-model ensemble",
     "Labor Composite", "10Y − 3M Spread", "10Y − 3M", "10Y − 2Y", "5Y − 2Y",
     "Financial Conditions", "Adjusted Financial Conditions", "Financial Stress",
     "Economic Activity (3-mo)", "Shiller CAPE", "Implied 10y real return",
     "GDPNow nowcast", "Credit-stress composite", "Activity Diffusion (CFNAI)",
     "Labor breadth · below trend", "Labor momentum · deteriorating", "Sahm Rule",
     "Wage growth (median)", "SOFR", "Fed Funds (EFFR)", "1M T-Bill (DGS1MO)",
-    "4-model ensemble", "NY Fed", "Wright", "BIC-selected", "Estrella-Mishkin",
+    "3-model ensemble", "NY Fed", "Wright", "BIC-selected", "Estrella-Mishkin",
     "Chauvet-Piger", "BIC model · this scenario",
     # early-warning ladder rungs
     "Yield-curve inversion (10y–3m)", "Bank lending standards (SLOOS)",
