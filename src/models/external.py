@@ -3,7 +3,7 @@
 These series are pulled from FRED for display alongside our own model output:
 
 * ``RECPROUSM156N`` — Smoothed U.S. Recession Probabilities (Chauvet & Piger),
-  published by the St Louis Fed. The de facto "NY Fed-style" public number.
+  published by the St Louis Fed. This is a coincident nowcast, not a NY Fed forecast.
 * ``SAHMREALTIME`` — Sahm Rule recession indicator. Fires at 0.5; uses
   *real-time* unemployment data with no NBER dependency, so it carries no
   look-ahead and is not revised after a release.
@@ -16,7 +16,7 @@ import pandas as pd
 
 
 def ny_fed_probability(panel: pd.DataFrame) -> pd.Series:
-    """Latest NY Fed-style probability (%), monthly indexed.
+    """Chauvet-Piger smoothed nowcast (%), monthly indexed (legacy function name).
 
     Returns an empty series if the FRED column isn't present in the panel.
     """
@@ -34,17 +34,21 @@ def sahm_rule(panel: pd.DataFrame) -> pd.Series:
     Threshold is 0.5. Returns the FRED-published series if available;
     otherwise reconstructs it from UNRATE.
     """
-    if "SAHMREALTIME" in panel.columns:
+    if "SAHMREALTIME" in panel.columns and panel["SAHMREALTIME"].notna().any():
         s = panel["SAHMREALTIME"].dropna()
         s.name = "sahm"
+        s.attrs["source"] = "SAHMREALTIME"
         return s
     if "UNRATE" not in panel.columns:
         return pd.Series(dtype=float, name="sahm")
     unrate = panel["UNRATE"].dropna().resample("ME").last()
     three_mo = unrate.rolling(3).mean()
-    twelve_mo_min = unrate.rolling(12).min()
+    # Minimum of the three-month averages in the PREVIOUS twelve months.
+    twelve_mo_min = three_mo.shift(1).rolling(12).min()
     sahm = (three_mo - twelve_mo_min).rename("sahm")
-    return sahm.dropna()
+    sahm = sahm.dropna()
+    sahm.attrs["source"] = "reconstructed from revised UNRATE"
+    return sahm
 
 
 def sahm_state(value: float) -> tuple[str, str]:

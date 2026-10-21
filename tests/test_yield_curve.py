@@ -44,7 +44,8 @@ def test_inversion_detection_on_synthetic_curve():
     stats = yc.inversion_stats(nber)
 
     assert isinstance(stats["months_inverted"], int)
-    assert stats["hit_rate"][1] >= 1  # at least one inversion episode detected
+    assert stats["hit_rate"] == (0, 0)  # 36-month outcome is not observed yet
+    assert stats["pending_episodes"] == 1
 
 
 def test_hit_rate_counts_correctly_given_known_recessions():

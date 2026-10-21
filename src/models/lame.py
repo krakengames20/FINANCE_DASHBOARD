@@ -68,8 +68,8 @@ class LAME:
         composite = self._composite["composite"].dropna()
         if self._zscores is None or self._zscores.empty:
             return composite
-        coverage = self._zscores.notna().sum(axis=1)
-        threshold = max(int(coverage.max() * 0.7), 1)
+        coverage = (self._zscores.notna() & self._weights.notna()).sum(axis=1)
+        threshold = max(int(np.ceil(coverage.max() * 0.7)), 1)
         full_idx = coverage[coverage >= threshold].index
         return composite.loc[composite.index.intersection(full_idx)]
 
@@ -82,10 +82,10 @@ class LAME:
         """
         if self._zscores is None or self._zscores.empty:
             return None
-        coverage = self._zscores.notna().sum(axis=1)
+        coverage = (self._zscores.notna() & self._weights.notna()).sum(axis=1)
         if coverage.max() == 0:
             return None
-        threshold = max(int(coverage.max() * 0.7), 1)
+        threshold = max(int(np.ceil(coverage.max() * 0.7)), 1)
         adequate = coverage[coverage >= threshold]
         return adequate.index[-1] if not adequate.empty else None
 
@@ -133,6 +133,7 @@ class LAME:
                     "name": name,
                     "current_value": latest_v,
                     "z_score": latest_z,
+                    "reference_z_score": z_for_contrib,
                     "weight": weight,
                     "contribution": contribution,
                     "as_of": as_of,
@@ -143,7 +144,7 @@ class LAME:
     # ------------------------------------------------------------- internals
 
     def _prepare_monthly_values(self, panel: pd.DataFrame) -> pd.DataFrame:
-        """Resample each indicator to month-end, then apply its registry transform."""
+        """Smooth weekly claims before sampling; apply monthly transforms on the calendar."""
         cols: dict[str, pd.Series] = {}
         for name in self.INDICATORS:
             meta = SERIES_REGISTRY[name]
@@ -153,9 +154,13 @@ class LAME:
             raw = panel[fred_id].dropna()
             if raw.empty:
                 continue
-            # Resample to month-end first so weekly/daily transforms are stable.
-            monthly = raw.resample("ME").last()
-            transformed = transform_series(monthly, meta["transform"])
+            if meta["freq"] == "W" and meta["transform"] == "ma4":
+                # ICSA is weekly: smooth four weeks, then take the month-end value.
+                weekly = raw.resample("W-SAT").last()
+                transformed = transform_series(weekly, "ma4").resample("ME").last()
+            else:
+                monthly = raw.resample("ME").last()
+                transformed = transform_series(monthly, meta["transform"])
             cols[name] = transformed
         if not cols:
             return pd.DataFrame()

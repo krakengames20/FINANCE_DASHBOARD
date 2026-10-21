@@ -2,7 +2,7 @@
 project's dot-com comparison.
 
 Sections: signal tiles (CALM / WATCH / ALERT), the 20-stock watchlist table,
-four charts (builders vs leaders, group performance, 1-month moves, breadth)
+four market charts (builders vs leaders, group performance, 1-month moves, breadth),
 and the catalyst countdown. Prices come from Yahoo Finance (delayed); credit
 and rates from FRED via the existing client. Each section is isolated, so a
 failure in one shows a note instead of breaking the page.
@@ -517,7 +517,10 @@ def _footnote() -> None:
         "(<code>THRESHOLDS</code> in src/models/ai_bubble.py). Private-credit marks, CDS and GPU "
         "rental prices have no free daily feed, so listed proxies stand in. The scenario odds and "
         "rulebook lights come in the next phase.</p>"
-        "<p>Research, not investment advice.</p>"
+        "<p>Performance uses daily closing-price returns, excluding dividends. The private-credit "
+        "proxy blends local-currency returns (including SoftBank in JPY), rather than a USD "
+        "portfolio return. Risk scores and exposure notes are manually maintained research; "
+        "reported and estimated event dates require confirmation.</p>"
         "</div></div>",
         unsafe_allow_html=True,
     )

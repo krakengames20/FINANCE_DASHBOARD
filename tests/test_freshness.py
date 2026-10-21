@@ -17,6 +17,19 @@ def _clean_log():
     freshness.clear_log()
 
 
+def test_cached_metadata_survives_reload_without_replacing_newer_fetches():
+    freshness.record_fetch("UNRATE", pd.Series([4.], index=[pd.Timestamp("2026-09-01")]))
+    saved = freshness.fetch_log()
+    original_time = saved["UNRATE"]["fetched_at"]
+    freshness.clear_log()
+    freshness.restore_fetch_log(saved)
+    assert freshness.fetch_log()["UNRATE"]["fetched_at"] == original_time
+    # A later failed refresh is material information and must remain visible.
+    freshness.record_fetch("UNRATE", error="temporary outage")
+    freshness.restore_fetch_log(saved)
+    assert freshness.fetch_log()["UNRATE"]["error"] == "temporary outage"
+
+
 def _series(end: str, freq: str, n: int = 40) -> pd.Series:
     idx = pd.date_range(end=end, periods=n, freq=freq)
     return pd.Series(range(n), index=idx, dtype=float)

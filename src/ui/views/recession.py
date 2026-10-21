@@ -1,4 +1,4 @@
-"""Recession page — four-model recession-start ensemble + "in recession now" nowcast panel.
+"""Recession page — three-model recession-start ensemble + "in recession now" nowcast panel.
 
 Three tabs surface the same analytics the weekly investment-committee email
 reports: The Reading (headline + history + drivers), Under the Hood (the four
@@ -133,6 +133,11 @@ def _direction(report: dict) -> str:
 
 
 def _render_reading(report: dict, nber: pd.Series) -> None:
+    calibration = report.get("oos_calibration") or {}
+    if calibration.get("skill_score", 0.) < 0:
+        st.warning("Walk-forward probability accuracy is worse than a constant full-window base rate. "
+                   "That benchmark uses hindsight; compare the expanding benchmark in Methodology too. "
+                   "Results use revised data and approximate release lags, so this is a research signal.")
     ens = report["ensemble_probability"]
     color = _prob_color(ens)
     lo, hi = report.get("ci_lower"), report.get("ci_upper")
@@ -140,7 +145,7 @@ def _render_reading(report: dict, nber: pd.Series) -> None:
     p_lo, p_hi = min(probs.values()), max(probs.values())
 
     ci_txt = (
-        f"90% CI {lo:.0f}–{hi:.0f}%" if lo is not None and hi is not None else "CI unavailable"
+        f"BIC-only indicative 90% interval {lo:.0f}–{hi:.0f}%" if lo is not None and hi is not None else "BIC interval unavailable"
     )
     spark = sparkline_svg(
         report["ensemble_history"].tail(60).values, color=color, width=240, height=44
@@ -158,7 +163,7 @@ def _render_reading(report: dict, nber: pd.Series) -> None:
     with left:
         st.markdown(
             metric_card(
-                label=f"{HEADLINE_LABEL} · 4-model ensemble",
+                label=f"{HEADLINE_LABEL} · 3-model ensemble",
                 value=headline_value_text(report),
                 unit="%" if applicable else "",
                 risk_color_hex=color if applicable else PALETTE["text_muted"],
@@ -211,7 +216,7 @@ def _render_reading(report: dict, nber: pd.Series) -> None:
             x=ens_hist.index, y=ens_hist.values, mode="lines",
             line=dict(color=PALETTE["accent"], width=1.6),
             fill="tozeroy", fillcolor=_fade(PALETTE["accent"], 0.12),
-            name="4-model ensemble",
+            name="3-model ensemble",
             hovertemplate="%{x|%b %Y}<br>%{y:.0f}%<extra>Ensemble</extra>",
         )
     )
@@ -248,13 +253,13 @@ def _reading_text(report: dict) -> str:
     consensus = report["consensus"].lower()
     if not headline_applicable(report):
         return (
-            "The latest NBER-dated month is a recession month. The four-model ensemble estimates "
+            "The latest NBER-dated month is a recession month. The three-model ensemble estimates "
             "the probability that a <i>new</i> recession starts within 12 months and is trained "
             "only on months not already in a recession, so its reading is not applicable here "
             "and is withheld. The nowcast panel above shows the coincident indicators."
         )
     parts = [
-        f"The four-model ensemble estimates a <b>{ens:.0f}%</b> probability that a new U.S. "
+        f"The three-model ensemble estimates a <b>{ens:.0f}%</b> probability that a new U.S. "
         f"recession starts within the next 12 months (an NBER peak in that window) — "
         f"historically associated with <b>{_consistent_with(ens)}</b>."
     ]
@@ -314,12 +319,12 @@ def _render_under_hood(report: dict) -> None:
     benchmarks = report.get("benchmark_probabilities") or {}
     ens = report["ensemble_probability"]
 
-    # Cards: the ensemble, then the four forward (recession-start) models, then
+    # Cards: the ensemble, then the three forward (recession-start) models, then
     # the nowcast reading shown separately (not part of the average).
-    order = ["NY Fed", "Wright", "BIC-selected", "Estrella-Mishkin"]
-    cards = [("4-model ensemble", ens, "ensemble")] + [
+    order = ["NY Fed", "Wright", "BIC-selected"]
+    cards = [("3-model ensemble", ens, "ensemble")] + [
         (name, probs[name], "forward") for name in order if name in probs
-    ] + [(name, val, "benchmark") for name, val in benchmarks.items()]
+    ] + [(name, val, "point" if name == "Estrella-Mishkin" else "benchmark") for name, val in benchmarks.items()]
     cols = st.columns(len(cards))
     for col, (name, val, kind) in zip(cols, cards):
         with col:
@@ -330,8 +335,9 @@ def _render_under_hood(report: dict) -> None:
                     unit="%",
                     risk_color_hex=PALETTE["accent"] if kind == "ensemble" else _prob_color(val),
                     subline={
-                        "ensemble": "mean of 4 forward models",
+                        "ensemble": f"3 models · as of {report.get('model_as_of', report.get('data_through', '—'))}",
                         "forward": "P(start ≤12m)",
+                        "point": "P(recession at t+12) · separate",
                         "benchmark": "nowcast · not in ensemble",
                     }[kind],
                 ),
@@ -375,9 +381,10 @@ def _render_under_hood(report: dict) -> None:
         "All probabilities are computed live from FRED — none are hand-entered. "
         "<b>NY Fed</b> and <b>Estrella-Mishkin</b> use the 10y-3m term spread; <b>Wright</b> adds the fed funds rate; "
         "<b>BIC-selected</b> is a sign-constrained multivariate probit. The ensemble is the equal-weighted "
-        "average of these four models of the probability that a new recession starts within 12 months. "
+        "average of three locally re-estimated models of the probability that a new recession starts within 12 months. "
         "Estrella-Mishkin keeps its frozen published constants, which were estimated for a different "
-        "target (recession in the month 12 months ahead)."
+        "target (recession in the month 12 months ahead), so it is excluded from the average and backtest. "
+        "NY Fed and Wright are local adaptations, not official institutional forecasts."
         f"{bench_txt}"
         "</div></div>",
         unsafe_allow_html=True,
@@ -542,7 +549,7 @@ def _render_scenario(report: dict) -> None:
     st.markdown(
         f'<div class="panel"><div class="panel-body" style="font-size:13px;line-height:1.7;color:{PALETTE["text_primary"]};">'
         "<p>Move the drivers and watch the probability respond. This perturbs the "
-        "<b>BIC-selected multivariate model</b> — the one specification of the four with "
+        "<b>BIC-selected multivariate model</b> — the specification with "
         "multiple tunable inputs — recomputing Φ(β·x) directly from its fitted coefficients "
         "(no refit). Every non-moved driver is held at its current value, so each reading is a "
         "<i>ceteris paribus</i> what-if, not a forecast of joint moves.</p>"
@@ -625,7 +632,7 @@ def _render_scenario(report: dict) -> None:
     st.markdown(
         f'<div class="panel" style="margin-top:12px;border-color:{PALETTE["panel_border"]};">'
         f'<div class="panel-body" style="font-size:11px;color:{PALETTE["text_muted"]};line-height:1.6;">'
-        "<b>Reading this honestly.</b> This is the BIC model alone, not the four-model ensemble "
+        "<b>Reading this honestly.</b> This is the BIC model alone, not the three-model ensemble "
         f"headline ({report['ensemble_probability']:.0f}%). It assumes each driver moves "
         "independently — real downturns move them together, so a realistic joint move would "
         "typically push the probability higher than any single-slider change implies. Slider "

@@ -22,8 +22,7 @@ def load_nber_recessions(
 ) -> pd.Series:
     """Return a monthly boolean series, True during NBER recessions.
 
-    A month is flagged True if it falls on or after a peak and on or before
-    the trough (inclusive at both ends).
+    Follows FRED USREC: the peak month is excluded and the trough included.
     """
     path = Path(path) if path else _DEFAULT_PATH
     cycles = pd.read_csv(path, parse_dates=["peak", "trough"])
@@ -33,7 +32,7 @@ def load_nber_recessions(
     flag = pd.Series(False, index=idx, name="nber_recession")
 
     for _, row in cycles.iterrows():
-        mask = (idx >= row["peak"]) & (idx <= row["trough"])
+        mask = (idx > row["peak"]) & (idx <= row["trough"])
         flag.loc[mask] = True
 
     return flag

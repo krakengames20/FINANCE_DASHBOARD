@@ -36,8 +36,8 @@ def render(market_prob: pd.DataFrame, nber: pd.Series | None = None) -> None:
     st.markdown(
         f'<div class="panel"><div class="panel-body" style="font-size:13px;line-height:1.7;color:{PALETTE["text_primary"]};">'
         "<b>Market-implied policy path.</b> The Atlanta Fed's Market Probability Tracker "
-        "infers, from CME options on SOFR futures, the probability distribution of the FOMC "
-        "policy rate after each upcoming quarterly contract. This is what the market is "
+        "infers, from CME options on SOFR futures, risk-neutral distributions of the "
+        "three-month compounded average SOFR over each reference quarter. This is what the market is "
         "<i>pricing</i> — distinct from the spot rate and term structure on the Yield Curve tab."
         "</div></div>",
         unsafe_allow_html=True,
@@ -84,7 +84,7 @@ def _cards(rp: pd.DataFrame, dirs_latest: pd.DataFrame, snap: pd.Timestamp) -> N
         elif cut > hike + 5:
             lean, lean_color = "CUTS PRICED", PALETTE["risk_low"]
         else:
-            lean, lean_color = "ON HOLD", PALETTE["text_muted"]
+            lean, lean_color = "BALANCED", PALETTE["text_muted"]
     else:
         lean, lean_color = "—", PALETTE["text_muted"]
 
@@ -92,7 +92,7 @@ def _cards(rp: pd.DataFrame, dirs_latest: pd.DataFrame, snap: pd.Timestamp) -> N
     with cols[0]:
         st.markdown(
             '<div class="panel" style="height:100%;">'
-            '<div class="panel-header"><span>Implied rate · next meeting</span>'
+            '<div class="panel-header"><span>Implied SOFR · nearest quarter</span>'
             f'<span class="risk-badge" style="color:{lean_color};">{lean}</span></div>'
             '<div class="panel-body">'
             f'<div class="metric-big data-font" style="color:{PALETTE["accent"]};">{front_rate:.2f}<span class="metric-unit">%</span></div>'
@@ -105,11 +105,11 @@ def _cards(rp: pd.DataFrame, dirs_latest: pd.DataFrame, snap: pd.Timestamp) -> N
         cut_s = f"{cut:.0f}%" if pd.notna(cut) else "—"
         st.markdown(
             '<div class="panel" style="height:100%;">'
-            '<div class="panel-header"><span>Next-meeting odds</span></div>'
+            '<div class="panel-header"><span>Nearest-quarter range odds</span></div>'
             '<div class="panel-body">'
             f'<div class="submodel-row"><span class="name" style="color:{PALETTE["risk_elevated"]};">Hike</span><span class="value">{hike_s}</span></div>'
             f'<div class="submodel-row"><span class="name" style="color:{PALETTE["risk_low"]};">Cut</span><span class="value">{cut_s}</span></div>'
-            f'<div class="metric-sub">{front_meeting.strftime("%b %Y")} meeting</div>'
+            f'<div class="metric-sub">{front_meeting.strftime("%b %Y")} reference quarter</div>'
             '</div></div>',
             unsafe_allow_html=True,
         )
@@ -198,7 +198,7 @@ def _path_comparison(df: pd.DataFrame, snap: pd.Timestamp) -> None:
 
     st.markdown(
         '<div class="label-small" style="margin-top:24px;">How the implied path has shifted · '
-        'mean rate by meeting, across recent snapshots</div>',
+        'mean SOFR by reference quarter, across recent snapshots</div>',
         unsafe_allow_html=True,
     )
     fig = go.Figure()
@@ -240,22 +240,27 @@ def _heatmap(df: pd.DataFrame, snap: pd.Timestamp) -> None:
         )
     )
     fig.update_yaxes(title="Target range (%)", autorange="reversed")
-    fig.update_xaxes(title="Meeting / contract")
+    fig.update_xaxes(title="Reference quarter start")
     apply_template(fig, height=420, show_legend=False)
     st.plotly_chart(fig, use_container_width=True)
     chart_help("rate.heatmap")
+    omitted = (100. - mat.sum(axis=0)).clip(lower=0.)
+    st.caption("Exported buckets are not a complete distribution. Unshown mass by quarter: " +
+               "; ".join(f"{d:%b %Y}: {v:.2f}%" for d, v in omitted.items()) +
+               ". Source probabilities are preserved without renormalizing.")
 
 
 def _how_to_read(snap: pd.Timestamp) -> None:
     st.markdown(
         '<div class="panel"><div class="panel-header"><span>How to read this</span></div>'
         f'<div class="panel-body" style="font-size:13px;line-height:1.7;color:{PALETTE["text_primary"]};">'
-        "<p>The Atlanta Fed estimates a full probability distribution for the policy rate after "
-        "each upcoming quarterly SOFR contract, from CME options prices. The <b>fan chart</b> shows "
-        "the mean expected path with its 25th-75th percentile band — the band widens with horizon "
-        "because the market is less certain further out. The <b>shift chart</b> overlays the path "
-        "from recent snapshots so you can see how expectations have re-priced. The <b>heatmap</b> "
-        "shows the probability mass on each 25bp target range per meeting.</p>"
+        "<p>The Atlanta Fed estimates option-implied, risk-neutral distributions of the "
+        "<b>three-month compounded average SOFR</b> over each contract's reference quarter. "
+        "Dates mark the quarter's start, not FOMC meetings. SOFR is related to the policy rate "
+        "but differs from the federal funds target. These are market prices of risk, not "
+        "objective forecasts. The fan shows the mean and 25th–75th percentile band; the "
+        "shift chart compares snapshots. The heatmap shows the exported 25bp buckets; "
+        "omitted tails mean columns may total less than 100%.</p>"
         f'<p style="color:{PALETTE["text_muted"]};font-size:11px;margin-top:8px;">'
         f'Snapshot as of {snap.strftime("%d %b %Y")}. This is a bundled export, refreshed manually from the '
         f'<a href="https://www.atlantafed.org/cenfis/market-probability-tracker" style="color:{PALETTE["accent"]};">'

@@ -114,10 +114,10 @@ def _render_breakdown(model: LAME) -> None:
 
     # Sort by absolute z-score so every indicator (even those with missing
     # contribution at the reference date) gets ranked sensibly.
-    df = df.iloc[df["z_score"].abs().fillna(-1).sort_values(ascending=False).index].reset_index(drop=True)
+    df = df.iloc[df["reference_z_score"].abs().fillna(-1).sort_values(ascending=False).index].reset_index(drop=True)
 
     fig = go.Figure()
-    z_vals = df["z_score"].fillna(0)
+    z_vals = df["reference_z_score"]
     colors = [PALETTE["risk_low"] if v >= 0 else PALETTE["risk_high"] for v in z_vals]
     fig.add_trace(
         go.Bar(
@@ -147,14 +147,14 @@ def _render_breakdown(model: LAME) -> None:
 
     # Compact table: each indicator shows its own latest value + date, then the
     # weight/contribution computed at the reference date.
-    display = df[["label", "as_of", "current_value", "z_score", "weight", "contribution"]].copy()
+    display = df[["label", "as_of", "current_value", "reference_z_score", "weight", "contribution"]].copy()
     display["as_of"] = display["as_of"].map(
         lambda d: pd.to_datetime(d).strftime("%Y-%m") if pd.notna(d) else "—"
     )
     display["current_value"] = display["current_value"].map(
         lambda v: f"{v:,.2f}" if pd.notna(v) else "—"
     )
-    display["z_score"] = display["z_score"].map(
+    display["reference_z_score"] = display["reference_z_score"].map(
         lambda v: f"{v:+.2f}σ" if pd.notna(v) else "—"
     )
     display["weight"] = display["weight"].map(
@@ -163,7 +163,7 @@ def _render_breakdown(model: LAME) -> None:
     display["contribution"] = display["contribution"].map(
         lambda v: f"{v:+.3f}" if pd.notna(v) else "—"
     )
-    display.columns = ["indicator", "as of", "value", "z", "weight", "contribution"]
+    display.columns = ["indicator", "latest as of", "latest value", "z at composite date", "weight", "contribution"]
     st.dataframe(display, hide_index=True, use_container_width=True)
 
 
@@ -172,9 +172,8 @@ def _render_sahm_rule(panel: pd.DataFrame, nber: pd.Series) -> None:
 
     The Sahm Rule fires when the 3-month moving average of the unemployment
     rate rises by 0.5pp or more above its 12-month low. It has historically
-    triggered at the start of every U.S. recession since 1970 with no false
-    positives. Crucially, it uses real-time UNRATE data and is not revised
-    after release — so it has no look-ahead in the way the NBER target does.
+    triggered around historical recessions, but can give false signals (2024).
+    The published real-time series is preferred; the fallback uses revised UNRATE.
     """
     from src.models.external import sahm_rule, sahm_state
 
@@ -192,7 +191,7 @@ def _render_sahm_rule(panel: pd.DataFrame, nber: pd.Series) -> None:
     }[severity]
 
     st.markdown(
-        '<div class="label-small" style="margin-top:16px;">Sahm Rule · real-time recession indicator</div>',
+        '<div class="label-small" style="margin-top:16px;">Sahm Rule · unemployment recession indicator</div>',
         unsafe_allow_html=True,
     )
 
@@ -238,9 +237,10 @@ def _render_sahm_rule(panel: pd.DataFrame, nber: pd.Series) -> None:
     st.markdown(
         f'<div class="panel"><div class="panel-body" style="font-size:12px;line-height:1.6;color:{PALETTE["text_primary"]};">'
         "The Sahm Rule is a complement to the labor composite. It uses only the "
-        "unemployment rate (in real time, with no look-ahead) and has triggered at the "
-        "onset of every U.S. recession since 1970. A reading near or above 0.5pp is the "
-        "headline real-time recession signal. Source: <code>SAHMREALTIME</code> on FRED."
+        "unemployment rate. A reading at or above 0.5pp is a trigger, not confirmation: "
+        "the published indicator crossed that threshold in July–September 2024 without an "
+        "NBER-dated recession. Missing months prevent a full fallback reconstruction. "
+        f"Source: {sahm.attrs.get('source', 'unavailable')}."
         "</div></div>",
         unsafe_allow_html=True,
     )

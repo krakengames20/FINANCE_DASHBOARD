@@ -48,6 +48,9 @@ def render(
     )
     composite = composite_risk(ensemble_now, lame_now, curve_now)
 
+    from src.ui.business_cycle import render as render_business_cycle
+
+    render_business_cycle(panel)
     _row_one(current, history, lame_hist, spreads)
     _row_policy_path(market_prob)
     _row_two(history, lame_hist, spreads, nber)
@@ -123,7 +126,7 @@ def _recession_card(current: dict, history: pd.DataFrame) -> None:
     <div style="display:flex;align-items:flex-start;gap:24px;">
       <div>
         <div class="metric-big data-font" style="color:{color};">{shown}<span class="metric-unit">{"" if withheld else "%"}</span></div>
-        <div class="metric-sub">4-model ensemble · NBER peak in next 12 months</div>
+        <div class="metric-sub">3-model ensemble · NBER peak in next 12 months</div>
         <div style="margin-top:10px;">{spark}</div>{note_html}
       </div>
       <div style="flex:1;min-width:0;">
@@ -223,7 +226,7 @@ def _row_policy_path(market_prob: pd.DataFrame | None) -> None:
         elif cut > hike + 5:
             lean, lean_color = "CUTS PRICED", PALETTE["risk_low"]
         else:
-            lean, lean_color = "ON HOLD", PALETTE["text_muted"]
+            lean, lean_color = "BALANCED", PALETTE["text_muted"]
     else:
         lean, lean_color = "—", PALETTE["text_muted"]
 
@@ -239,11 +242,11 @@ def _row_policy_path(market_prob: pd.DataFrame | None) -> None:
         cut_s = f"{cut:.0f}%" if np.isfinite(cut) else "—"
         st.markdown(
             '<div class="panel" style="height:100%;">'
-            '<div class="panel-header"><span>Implied rate · next meeting</span>'
+            '<div class="panel-header"><span>Implied SOFR · nearest quarter</span>'
             f'<span class="risk-badge" style="color:{lean_color};">{lean}</span></div>'
             '<div class="panel-body">'
             f'<div class="metric-big data-font" style="color:{PALETTE["accent"]};">{front_rate:.2f}<span class="metric-unit">%</span></div>'
-            f'<div class="metric-sub">mean · {front.strftime("%b %Y")} meeting · as of {snap.strftime("%d %b %Y")}</div>'
+            f'<div class="metric-sub">mean · {front.strftime("%b %Y")} reference quarter · as of {snap.strftime("%d %b %Y")}</div>'
             f'<div style="margin-top:10px;">'
             f'<div class="submodel-row"><span class="name" style="color:{PALETTE["risk_elevated"]};">Hike</span><span class="value">{hike_s}</span></div>'
             f'<div class="submodel-row"><span class="name" style="color:{PALETTE["risk_low"]};">Cut</span><span class="value">{cut_s}</span></div>'
@@ -349,12 +352,16 @@ def _row_three(ensemble_now, lame_now, curve_now, composite, current) -> None:
     left, right = st.columns(2)
 
     with left:
-        rows = [
-            ("Recession ensemble (50%)", f"{ensemble_now:.0f}%", PALETTE["accent"]),
-            ("Labor-risk (25%)", f"{composite['contributions'].get('lame', 0)*4:.0f} → {composite['contributions'].get('lame', 0):.0f} pts", PALETTE["submodel"]["labor"]),
-            ("Curve-risk (25%)", f"{composite['contributions'].get('curve', 0)*4:.0f} → {composite['contributions'].get('curve', 0):.0f} pts", PALETTE["submodel"]["yield_curve"]),
-            ("Composite", f"{composite['composite']} · {composite['band']}", risk_color(composite["band"])),
-        ]
+        rows = []
+        for name, label, color in [("ensemble", "Recession ensemble", PALETTE["accent"]),
+                                    ("lame", "Labor-risk", PALETTE["submodel"]["labor"]),
+                                    ("curve", "Curve-risk", PALETTE["submodel"]["yield_curve"])]:
+            weight = composite["weights"][name]
+            risk = composite["risks"][name]
+            reading = f"{risk:.0f} → {composite['contributions'][name]:.0f} pts" if np.isfinite(risk) else "unavailable"
+            rows.append((f"{label} ({weight:.0%})", reading, color))
+        shown = f"{composite['composite']:.0f}" if np.isfinite(composite['composite']) else "—"
+        rows.append(("Composite", f"{shown} · {composite['band']}", risk_color(composite["band"])))
         body = "".join(
             f'<div class="submodel-row"><span class="name">{label}</span>'
             f'<span class="value" style="color:{color};">{value}</span></div>'
@@ -542,22 +549,15 @@ def _row_weight_sensitivity(ensemble_now: float, lame_now: float, curve_now: flo
     with cols[2]:
         w_curve = st.slider("Yield curve", 0, 100, 25, 5, key="w_curve")
 
-    total = max(w_ens + w_lame + w_curve, 1)
-    ne, nl, nc = w_ens / total, w_lame / total, w_curve / total
-
-    ensemble_risk = float(np.clip(ensemble_now, 0, 100)) if np.isfinite(ensemble_now) else 0.0
-    lame_risk_v = lame_to_risk(lame_now) if np.isfinite(lame_now) else 0.0
-    curve_risk_v = curve_to_risk(curve_now) if np.isfinite(curve_now) else 0.0
-
-    custom_score = ne * ensemble_risk + nl * lame_risk_v + nc * curve_risk_v
-    default_score = composite_risk(ensemble_now, lame_now, curve_now)["composite"]
-
-    band = (
-        "LOW" if custom_score < 20 else
-        "ELEVATED" if custom_score < 40 else
-        "HIGH" if custom_score < 60 else
-        "CRITICAL"
-    )
+    custom = composite_risk(ensemble_now, lame_now, curve_now,
+                            weights={"ensemble": w_ens, "lame": w_lame, "curve": w_curve})
+    ne, nl, nc = [custom["weights"][name] for name in ("ensemble", "lame", "curve")]
+    ensemble_risk, lame_risk_v, curve_risk_v = [custom["risks"][name] for name in ("ensemble", "lame", "curve")]
+    custom_score = custom["composite"]
+    custom_text = f"{custom_score:.0f}" if np.isfinite(custom_score) else "—"
+    default_value = composite_risk(ensemble_now, lame_now, curve_now)["composite"]
+    default_score = f"{default_value:.0f}" if np.isfinite(default_value) else "—"
+    band = custom["band"]
     color = risk_color(band)
 
     with cols[3]:
@@ -566,7 +566,7 @@ def _row_weight_sensitivity(ensemble_now: float, lame_now: float, curve_now: flo
             '<div class="panel-header"><span>Custom-weighted composite</span></div>'
             '<div class="panel-body">'
             f'<div style="display:flex;align-items:baseline;gap:24px;">'
-            f'<div class="metric-big data-font" style="color:{color};">{custom_score:.0f}</div>'
+            f'<div class="metric-big data-font" style="color:{color};">{custom_text}</div>'
             f'<div>'
             f'<div class="risk-badge" style="color:{color};">{band}</div>'
             f'<div class="metric-sub">default (50/25/25): {default_score}</div>'
@@ -577,9 +577,9 @@ def _row_weight_sensitivity(ensemble_now: float, lame_now: float, curve_now: flo
 
     # Show contribution breakdown
     rows = [
-        ("Ensemble", f"{ne:.0%}", f"{ensemble_risk:.0f}", f"{ne * ensemble_risk:.1f}", PALETTE["accent"]),
-        ("Labor",    f"{nl:.0%}", f"{lame_risk_v:.0f}",   f"{nl * lame_risk_v:.1f}",   PALETTE["submodel"]["labor"]),
-        ("Curve",    f"{nc:.0%}", f"{curve_risk_v:.0f}",  f"{nc * curve_risk_v:.1f}",  PALETTE["submodel"]["yield_curve"]),
+        ("Ensemble", f"{ne:.0%}", f"{ensemble_risk:.0f}" if np.isfinite(ensemble_risk) else "—", f"{custom['contributions']['ensemble']:.1f}", PALETTE["accent"]),
+        ("Labor",    f"{nl:.0%}", f"{lame_risk_v:.0f}" if np.isfinite(lame_risk_v) else "—",   f"{custom['contributions']['lame']:.1f}",   PALETTE["submodel"]["labor"]),
+        ("Curve",    f"{nc:.0%}", f"{curve_risk_v:.0f}" if np.isfinite(curve_risk_v) else "—",  f"{custom['contributions']['curve']:.1f}",  PALETTE["submodel"]["yield_curve"]),
     ]
     body = "".join(
         f'<div class="submodel-row">'
@@ -648,6 +648,8 @@ def _row_valuation_cape(nber: pd.Series) -> None:
         return
 
     summary = cape_summary(cape)
+    if summary["as_of"].to_period("M") >= pd.Timestamp.today().to_period("M"):
+        st.caption("Current-month CAPE is provisional and may use partial prices and estimated earnings or CPI.")
     if not summary:
         return
 

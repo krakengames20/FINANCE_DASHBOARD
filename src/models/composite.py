@@ -46,7 +46,7 @@ def _band(score: float) -> str:
     return "CRITICAL"
 
 
-def composite_risk(ensemble_pct: float, lame_z: float, curve_10y3m: float) -> dict:
+def composite_risk(ensemble_pct: float, lame_z: float, curve_10y3m: float, *, weights: dict | None = None) -> dict:
     """Combine the three modules into a single 0–100 composite.
 
     Weights: 50% ensemble probability, 25% LAME-risk, 25% curve-risk.
@@ -55,24 +55,28 @@ def composite_risk(ensemble_pct: float, lame_z: float, curve_10y3m: float) -> di
     lame_risk = lame_to_risk(lame_z)
     curve_risk = curve_to_risk(curve_10y3m)
 
-    parts = [
-        ("ensemble", 0.50, ensemble_risk),
-        ("lame", 0.25, lame_risk),
-        ("curve", 0.25, curve_risk),
-    ]
+    weights = weights if weights is not None else {"ensemble": .5, "lame": .25, "curve": .25}
+    risks = {"ensemble": ensemble_risk, "lame": lame_risk, "curve": curve_risk}
+    if any(not np.isfinite(w) or w < 0 for w in weights.values()):
+        raise ValueError("Composite weights must be finite and nonnegative.")
+    parts = [(name, weights.get(name, 0.), value) for name, value in risks.items()]
 
     # If any part is missing, redistribute its weight across the available ones.
-    available = [(name, w, v) for name, w, v in parts if np.isfinite(v)]
+    available = [(name, w, v) for name, w, v in parts if np.isfinite(v) and w > 0]
     if not available:
-        return {"composite": 0, "band": "LOW", "contributions": {n: 0.0 for n, _, _ in parts}}
+        return {"composite": float("nan"), "band": "UNAVAILABLE",
+                "contributions": {n: 0.0 for n in risks}, "weights": {n: 0.0 for n in risks}, "risks": risks}
 
     total_w = sum(w for _, w, _ in available)
     composite = sum((w / total_w) * v for _, w, v in available)
-    contributions = {name: (w / total_w) * v if np.isfinite(v) else 0.0 for name, w, v in parts}
+    effective_weights = {name: w / total_w if np.isfinite(v) else 0.0 for name, w, v in parts}
+    contributions = {name: effective_weights[name] * v if np.isfinite(v) else 0.0 for name, _, v in parts}
 
     score = int(round(np.clip(composite, 0.0, 100.0)))
     return {
         "composite": score,
         "band": _band(score),
         "contributions": contributions,
+        "weights": effective_weights,
+        "risks": risks,
     }

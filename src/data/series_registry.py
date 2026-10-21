@@ -121,24 +121,25 @@ def transform_series(series: pd.Series, transform: str) -> pd.Series:
     if transform not in _VALID_TRANSFORMS:
         raise ValueError(f"Unknown transform {transform!r}; expected one of {_VALID_TRANSFORMS}.")
 
-    s = series.dropna().astype(float)
+    # Keep calendar gaps: dropping them turns a 12-month lag into 12 observations.
+    s = series.astype(float)
     if s.empty:
         return s
 
     if transform == "level":
         out = s
     elif transform == "yoy":
-        out = s.pct_change(12) * 100.0
+        out = s.pct_change(12, fill_method=None) * 100.0
     elif transform == "diff_3m":
         out = s.diff(3)
     elif transform == "ma4":
-        out = s.rolling(window=4, min_periods=1).mean()
+        out = s.rolling(window=4, min_periods=4).mean()
     elif transform == "ma_3m":
-        monthly = s.resample("ME").mean() if _is_subdaily(s) else s.rolling(3, min_periods=1).mean()
-        out = monthly
+        monthly = s.resample("ME").mean() if _is_subdaily(s) else s
+        out = monthly.rolling(3, min_periods=3).mean()
     elif transform == "ret_6m":
         monthly = s.resample("ME").last() if _is_subdaily(s) else s
-        out = monthly.pct_change(6) * 100.0
+        out = monthly.pct_change(6, fill_method=None) * 100.0
     else:  # pragma: no cover - guarded above
         out = s
 

@@ -15,29 +15,29 @@ from html import escape
 INDICATORS: dict[str, dict[str, str]] = {
     # ---- headline ---------------------------------------------------------
     "Composite Risk": {
-        "what": "The dashboard's single 0–100 recession-risk score: 50% the 12-month recession "
+        "what": "A heuristic 0–100 risk index, not a calibrated probability: 50% the 12-month recession "
                 "probability, 25% the labor composite, 25% the 10y–3m yield spread.",
         "high": "Higher = more recession risk. Bands: <20 LOW, 20–40 ELEVATED, 40–60 HIGH, 60+ CRITICAL.",
         "low": "Low = the three lenses agree the expansion looks intact.",
     },
     "Probability a new recession starts within 12 months": {
-        "what": "Average of four statistical models (NY Fed, Wright, BIC-selected, Estrella–Mishkin) "
+        "what": "Average of three locally re-estimated models (NY Fed, Wright, BIC-selected) "
                 "that estimate the chance a recession begins in the next 12 months.",
-        "high": "Above 30% is a warning, above 50% has historically preceded most recessions.",
+        "high": "Above 30% is the dashboard warning band; above 50% is elevated. These are judgmental thresholds.",
         "low": "Below 20% is the normal range during an expansion.",
     },
-    "4-model ensemble": {
-        "what": "Simple average of the four forward-looking recession models.",
+    "3-model ensemble": {
+        "what": "Simple average of the three forward-looking recession models.",
         "high": "Above 30% warning, above 50% elevated.",
         "low": "Below 20% is typical of an expansion.",
     },
     "NY Fed": {
-        "what": "Classic New York Fed model: recession odds from the 10y–3m Treasury spread alone.",
+        "what": "Local adaptation of a term-spread probit: recession-start odds from the 10y–3m Treasury spread alone.",
         "high": "Rises when the curve flattens or inverts (short rates above long rates).",
         "low": "Falls when the curve is steep (long rates well above short rates).",
     },
     "Wright": {
-        "what": "Jonathan Wright's model: the yield spread plus the level of the fed funds rate.",
+        "what": "Local adaptation of Wright's specification: the yield spread plus the level of the fed funds rate.",
         "high": "Rises with an inverted curve combined with high policy rates (tight money).",
         "low": "Falls with a steep curve and/or low policy rates.",
     },
@@ -48,7 +48,7 @@ INDICATORS: dict[str, dict[str, str]] = {
         "low": "Falls when they improve.",
     },
     "Estrella-Mishkin": {
-        "what": "The 1990s Estrella–Mishkin yield-curve model with its original, frozen coefficients.",
+        "what": "Separate benchmark: frozen 2006 coefficients predict recession in month 12, not a new recession within a year.",
         "high": "Rises as the 10y–3m spread falls toward or below zero.",
         "low": "Falls as the spread steepens.",
     },
@@ -250,7 +250,7 @@ INDICATORS: dict[str, dict[str, str]] = {
         "low": "Below 0.2 pp = no signal.",
     },
     "Recession-start ensemble (12-mo)": {
-        "what": "The 4-model recession probability.",
+        "what": "The 3-model recession probability.",
         "high": "Above 30% warning, above 50% elevated.",
         "low": "Below 20% normal.",
     },
@@ -355,7 +355,7 @@ INDICATORS: dict[str, dict[str, str]] = {
 }
 
 _ALIASES = {
-    "probability a new recession starts within 12 months · 4-model ensemble":
+    "probability a new recession starts within 12 months · 3-model ensemble":
         "probability a new recession starts within 12 months",
 }
 
@@ -412,8 +412,8 @@ def info_icon_html(label: str, *, align: str = "right") -> str:
 CHARTS: dict[str, str] = {
     # Macro Dashboard
     "dash.policy_path": (
-        "Each point is a future FOMC meeting; the line is the policy rate futures/options markets "
-        "expect after that meeting, and the band is the 25th–75th percentile range. A line sloping "
+        "Each point starts a SOFR reference quarter; the line is the three-month average rate markets "
+        "price for that quarter, and the band is the 25th–75th percentile range. A line sloping "
         "down = markets price rate cuts; up = hikes. Wider bands = more uncertainty."
     ),
     "dash.three_lenses": (
@@ -438,7 +438,7 @@ CHARTS: dict[str, str] = {
     ),
     # Recession
     "rec.history": (
-        "Recession-start probability over time for the 4-model ensemble and the BIC model, with "
+        "Recession-start probability over time for the 3-model ensemble and the BIC model, with "
         "NBER recessions shaded. Good models rise *before* the grey bars. Readings above 30% "
         "are a warning, above 50% elevated."
     ),
@@ -477,7 +477,7 @@ CHARTS: dict[str, str] = {
     ),
     "growth.factor_validation": (
         "Each dot is a quarter: the coincident factor (x) vs. actual GDP growth (y). A tight upward "
-        "pattern shows the factor is a reliable real-time stand-in for GDP."
+        "pattern shows historical co-movement, not validated real-time forecasting skill."
     ),
     "growth.vs_risk": (
         "Coincident factor (left axis, today's growth) vs. recession probability (right axis, "
@@ -592,7 +592,7 @@ CHARTS: dict[str, str] = {
     ),
     # Policy path
     "rate.fan": (
-        "Market-implied policy rate for each upcoming FOMC meeting (mean and most likely value) "
+        "Option-implied three-month average SOFR for each reference quarter (mean and mode) "
         "with the 25th–75th percentile band, from SOFR options. Downward slope = cuts priced."
     ),
     "rate.path_shift": (
@@ -600,8 +600,8 @@ CHARTS: dict[str, str] = {
         "expect more or earlier cuts than before (often after weak data)."
     ),
     "rate.heatmap": (
-        "Probability (colour) of each fed funds target range (rows) at each future meeting "
-        "(columns). Read down a column for the full distribution at that meeting."
+        "Exported probability (colour) of each rate range (rows) for each reference quarter "
+        "(columns). Unshown tails mean each column may total less than 100%."
     ),
     # AI Bubble
     "ai.builders_leaders": (
@@ -622,6 +622,13 @@ CHARTS: dict[str, str] = {
         "Share of the 20 AI names above their 50-day (short trend) and 200-day (long trend) "
         "averages. The dashed lines mark the 60% WATCH and 40% ALERT levels for the 200-day line. "
         "Breadth falling while the indices make new highs = narrowing leadership."
+    ),
+    "ai.search_attention": (
+        "Google search attention for the typed terms in the selected region and rolling window. "
+        "Look for attention surges and compare terms within one query. Google jointly scales "
+        "the series so the peak is 100; a different query is scaled again. These are relative "
+        "search-interest scores, not search counts or an investment signal. Open circles "
+        "mark incomplete periods and gaps mark unavailable readings."
     ),
 }
 

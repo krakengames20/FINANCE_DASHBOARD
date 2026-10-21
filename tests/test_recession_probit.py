@@ -1,4 +1,4 @@
-"""Four-model probit ensemble: feature engineering, selection, report assembly.
+"""Three-model probit ensemble: feature engineering, selection, report assembly.
 
 These tests exercise the pure modelling functions on synthetic FRED-style data
 so they never touch the network. Recessions are generated as a function of a
@@ -147,9 +147,11 @@ def test_optional_gaps_cannot_block_core_training(synthetic_raw):
     assert rep["ensemble_history"].index.max() == raw.index.max()
 
 
-def test_report_has_four_forward_models(report):
+def test_report_has_three_same_target_models_and_separate_frozen_benchmark(report):
     probs = report["model_probabilities"]
-    for name in ["NY Fed", "Wright", "BIC-selected", "Estrella-Mishkin"]:
+    assert set(probs) == {"NY Fed", "Wright", "BIC-selected"}
+    assert "Estrella-Mishkin" in report["benchmark_probabilities"]
+    for name in ["NY Fed", "Wright", "BIC-selected"]:
         assert name in probs
         assert 0 <= probs[name] <= 100
 
@@ -270,7 +272,7 @@ def test_feature_label_plain_english():
     assert rp.feature_label("CPILFESL_YOY") == "Core CPI (YoY)"
     assert rp.feature_label("UMCSENT") == "U. Michigan Consumer Sentiment"
     assert rp.feature_label("SPREAD") == "10Y–3M Treasury spread"
-    assert rp.feature_label("UNRATE_CHG3") == "Unemployment rate · 3-month change"
+    assert rp.feature_label("UNRATE_CHG3") == "Unemployment rate · YoY change in 3-month average"
     # Unknown codes fall back to the raw mnemonic.
     assert rp.feature_label("MADE_UP_CODE") == "MADE_UP_CODE"
 
